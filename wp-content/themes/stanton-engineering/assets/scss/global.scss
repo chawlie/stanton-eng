@@ -1,0 +1,105 @@
+@charset "UTF-8";
+
+// Import settings
+// -------------------------
+// @import "settings/settings";
+
+/*
+  Foundation for Sites components:
+  Import the building blocks you need for your project.
+  Reducing the number of imported components will optimize page speed.
+  ---------------------------------------------------------------------
+  The Foundation framework is built by Zurb
+  Licensed under MIT Open Source
+*/
+
+//  Settings
+// @import "../../node_modules/foundation-sites/scss/settings/settings"; // Foundation settings file.
+// Chawlie - not sure I need the above yet if it is being included later.
+
+// Foundation mixins & browser resets
+@import '../../node_modules/foundation-sites/scss/foundation';
+
+// Third-party libraries
+@import '../../node_modules/motion-ui/motion-ui';
+
+// Foundation global styles
+@include foundation-global-styles;
+
+// Individual foundation components
+@include foundation-grid;
+// @include foundation-flex-grid;
+@include foundation-typography;
+@include foundation-button;
+@include foundation-forms;
+@include foundation-range-input;
+@include foundation-accordion;
+@include foundation-accordion-menu;
+@include foundation-badge;
+@include foundation-breadcrumbs;
+@include foundation-button-group;
+@include foundation-callout;
+@include foundation-close-button;
+@include foundation-drilldown-menu;
+@include foundation-dropdown;
+@include foundation-dropdown-menu;
+@include foundation-flex-video;
+@include foundation-label;
+@include foundation-media-object;
+@include foundation-menu;
+@include foundation-off-canvas;
+@include foundation-orbit;
+@include foundation-pagination;
+@include foundation-progress-bar;
+@include foundation-progress-element;
+@include foundation-meter-element;
+@include foundation-slider;
+@include foundation-sticky;
+@include foundation-reveal;
+@include foundation-switch;
+@include foundation-table;
+@include foundation-tabs;
+@include foundation-thumbnail;
+@include foundation-title-bar;
+@include foundation-tooltip;
+@include foundation-top-bar;
+@include foundation-visibility-classes;
+@include foundation-float-classes;
+@include foundation-menu-icon;
+
+/* Import Libraries */
+@import "../../node_modules/font-awesome/scss/font-awesome";
+@import "../../node_modules/slick-carousel/slick/slick.scss";
+@import "../../node_modules/slick-carousel/slick/slick-theme.scss";
+// @import "../../node_modules/fancybox/source/jquery.fancybox.css";
+
+// Import theme support
+@import 'variables';
+@import 'utilities';
+
+// Import theme styles
+// -------------------------
+@import "theme/print";
+@import "theme/variables";
+@import "foundationoverrides";
+@import "theme/generalstyles";
+@import "theme/formstyles";
+@import "theme/typography";
+@import "theme/primarynav";
+@import "theme/mobilenav";
+@import "theme/header";
+@import "theme/footer";
+@import "theme/error404";
+@import "theme/comingsoon";
+@import "theme/home";
+@import "theme/subpages";
+@import "theme/services";
+@import "theme/news";
+@import "theme/contact";
+@import "theme/teammembers";
+@import "theme/portfolio";
+@import "theme/memberships";
+
+// Import custom styles
+// -------------------------
+// @import "custom";

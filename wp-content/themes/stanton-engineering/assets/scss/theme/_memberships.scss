@@ -1,0 +1,7 @@
+.membership-affiliations {
+    padding-top: 3%;
+
+    @media #{$medium-up} {
+        min-height: 490px;
+    }
+}

@@ -1,0 +1,45 @@
+// Our Team Members Page
+.our-team-members {
+    h1 {
+        font-size: 40px;
+        line-height: 1;
+
+        @media #{$medium-up} {
+            font-size: 50px;
+        }
+
+        @media #{$large-up} {
+            font-size: 60px;
+        }
+    }
+
+    h2 {
+        font-size: 18px;
+        font-weight: 700;
+        font-family: $sans-serif;
+        color: $color-blue;
+        text-transform: uppercase;
+        line-height: 1;
+    }
+
+    ul {
+        list-style: none;
+        margin: 0;
+
+        li {
+            padding: 5% 0;
+        }
+
+        li:nth-child(odd) {
+            background-color: #fff;
+        }
+
+        li:nth-child(even) {
+            background-color: #eee;
+        }
+    }
+}
+
+.team-member-info {
+    margin: 7% 5%;
+}

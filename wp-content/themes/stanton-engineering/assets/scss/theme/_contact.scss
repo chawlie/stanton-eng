@@ -1,0 +1,27 @@
+// Contact Page Styles
+.contact-page {
+    h2 {
+    }
+}
+
+.contact-details {
+    padding: 5% 0;
+    background-color: #fff;
+}
+
+.contact-page-content {
+
+    .post-body {
+
+        @media #{$medium-up} {
+            margin-top: -100px;
+        }
+    }
+}
+
+.google-map {
+    iframe {
+        border-top: 4px solid $color-light-gray !important;
+        border-bottom: 4px solid $color-light-gray !important;
+    }
+}

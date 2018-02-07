@@ -1,0 +1,86 @@
+/* Slick carousel overrides */
+@font-face {
+  font-family:"slick";
+  src:    url("#{$fonts-path}/slick.eot");
+  src:    url("#{$fonts-path}/slick.eot?#iefix") format("embedded-opentype"),
+          url("#{$fonts-path}/slick.woff") format("woff"),
+          url("#{$fonts-path}/slick.ttf") format("truetype"),
+          url("#{$fonts-path}/slick.svg#slick") format("svg");
+  font-weight: normal;
+  font-style: normal;
+}
+
+.slick-slider {
+	margin: $slick-margin;
+}
+
+.slick-list {
+    .slick-loading & {
+        background: #fff url("#{$img-path}/ajax-loader.gif") center center no-repeat;
+    }
+}
+
+.slick-slide {
+	position: relative;
+}
+
+.slick-prev,
+.slick-next {
+	z-index: 1000;
+	height: $slick-nav-size;
+	width: $slick-nav-size;
+	margin: $slick-nav-margin;
+
+	&::before {
+		font-family: $icon-font-family;
+		font-style: normal;
+		font-weight: normal;
+		line-height: 1;
+		font-size: $slick-nav-font-size;
+		-moz-osx-font-smoothing: grayscale;
+		 -webkit-font-smoothing: antialiased;
+	}
+
+	&:hover,
+	&:focus {
+		background: none;
+	}
+}
+
+.slick-prev {
+	left: $slick-nav-side-offset;
+
+	&::before {
+		content: $fa-var-chevron-left;
+	}
+
+	@media #{$small-only} {
+		left: $slick-nav-side-offset-small;
+	}
+}
+
+.slick-next {
+	right: $slick-nav-side-offset;
+
+	&::before {
+		content: $fa-var-chevron-right;
+	}
+
+	@media #{$small-only} {
+		right: $slick-nav-side-offset-small;
+	}
+}
+
+.slick-dots {
+	margin: 0;
+	padding: 0;
+	bottom: $slick-dots-bottom-offset;
+
+	li {
+		button {
+			&::before {
+				font-size: $slick-dots-font-size;
+			}
+		}
+	}
+}

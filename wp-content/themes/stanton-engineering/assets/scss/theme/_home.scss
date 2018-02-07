@@ -1,0 +1,38 @@
+// Home Page Styles
+.home-hero {
+    text-align: center;
+    background-color: $color-blue;
+
+    h1 {
+        text-transform: uppercase;
+        padding-top: 20%;
+        font-size: 24px;
+        color: #fff;
+        font-weight: 800;
+        font-family: $sans-serif;
+
+        @media #{$medium-up} {
+            font-size: 38px;
+        }
+
+        @media #{$large-up} {
+            font-size: 48px;
+        }
+    }
+
+    .home-hero-image {
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: cover;
+        padding-bottom: 150px;
+
+        @media #{$medium-up} {
+            min-height: 330px;
+        }
+
+        @media #{$large-up} {
+            min-height: 620px;
+        }
+    }
+}
+

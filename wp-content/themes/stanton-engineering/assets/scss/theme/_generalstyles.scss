@@ -1,0 +1,36 @@
+.columns:last-child:not(:first-child) {
+float: left;
+}
+
+a {
+    color: $color-green;
+}
+
+a:hover {
+    color: $color-light-blue;
+}
+
+hr {
+    border-bottom: 4px solid $color-blue;
+}
+
+.compressed-font {
+    font-family: $compressed-font;
+    font-weight: 400;
+    text-transform: uppercase;
+    color: #879fa0;
+}
+
+.button {
+    font-weight: 700;
+    border-radius: 100px;
+    font-size: 16px;
+
+    @media #{$medium-up} {
+        font-size: 18px;
+    }
+
+    &:hover {
+        background-color: $blue-light !important;
+    }
+}

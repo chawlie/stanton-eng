@@ -1,0 +1,80 @@
+[type='text'],
+[type='password'],
+[type='date'],
+[type='datetime'],
+[type='datetime-local'],
+[type='month'],
+[type='week'],
+[type='email'],
+[type='number'],
+[type='search'],
+[type='tel'],
+[type='time'],
+[type='url'],
+[type='color'],
+textarea {
+    border: 2px solid #ccc;
+
+    &:focus {
+        border: 2px solid $primary-color;
+    }
+}
+
+input[type=submit] {
+    background-color: $color-green;
+    border: none;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 100px;
+    font-weight: 700;
+    margin-top: 20px;
+    font-size: 16px;
+
+    @media #{$medium-up} {
+        font-size: 18px;
+    }
+
+    &:hover {
+        background-color: $color-blue;
+    }
+}
+
+.wpcf7 label {
+    font-weight: 700;
+    font-size: 16px;
+
+    &:first-child {
+        margin-top: 20px;
+    }
+
+    [type='text'], [type='password'], [type='date'], [type='datetime'], [type='datetime-local'], [type='month'], [type='week'], [type='email'], [type='number'], [type='search'], [type='tel'], [type='time'], [type='url'], [type='color'], textarea {
+        font-weight: 400;
+    }
+}
+
+.wpcf7 input[type="file"] {
+    background-color: #ececec;
+    padding: 15px;
+    text-transform: uppercase;
+}
+
+.wpcf7-validation-errors {
+    background-color: red;
+    padding: 15px !important;
+    color: #fff;
+    font-weight: 700;
+    border: none !important;
+}
+
+.wpcf7-not-valid-tip {
+    font-weight: 700 !important;
+    margin-top: -15px;
+}
+
+.wpcf7-mail-sent-ok {
+    background-color: #b8de7b;
+    font-weight: 700 !important;
+    border: none !important;
+    padding: 15px !important;
+    color: #4f711d;
+}

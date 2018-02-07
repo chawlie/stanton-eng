@@ -1,0 +1,159 @@
+/* Primary navigation styles */
+@media (max-width: 999px) {
+    .page-header {
+        display: none;
+    }
+}
+
+.primary-nav {
+    display: block;
+    margin-top: 2px;
+
+    ul {
+        list-style: none;
+        margin: 0;
+    }
+
+    & > ul {
+        position: relative;
+        float: right;
+        padding: 0;
+
+        & > li {
+            position: relative;
+            float: left;
+            padding: 0;
+            margin: 0;
+
+            a {
+                display: inline-block;
+                padding: 10px;
+                color: $color-gray-text;
+                text-transform: uppercase;
+                font-weight: 700;
+                letter-spacing: 2px;
+                padding-right: 30px;
+
+                @media #{$large-up} {
+                    padding-right: 40px;
+                }
+
+                &:hover {
+                    color: #fff;
+                    color: $color-green;
+                    background-color: #fff;
+                }
+            }
+
+            .caret {
+                color: #fff;
+                margin: 0 0 0 10px;
+                font-family: FontAwesome;
+                font-style: normal;
+                font-weight: normal;
+                line-height: 1;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+                display: none;
+
+                &:before {
+                    content: $fa-var-caret-down;
+                    color: $color-blue;
+                }
+            }
+
+            &.menu-item-has-children {
+                .caret {
+                    display: inline-block;
+                }
+            }
+
+            .sub-menu {
+                position: absolute;
+                display: block;
+                width: 200px;
+                opacity: 0;
+                visibility: hidden;
+                left: 0;
+                border: 1px solid $color-light-gray;
+                z-index: 100;
+
+                li {
+                    position: relative;
+                    text-align: left;
+                    background-color: #fff;
+
+                    &:last-child {
+                        border: none;
+                        margin: 0;
+                        padding-bottom: 20px;
+                    }
+
+                    a {
+                        display: block;
+                        padding: 20px 20px 0;
+                        line-height: 1.25;
+
+                        &:hover {
+                            color: $color-green;
+                        }
+                    }
+
+                    .caret {
+                        position: absolute;
+                        right: 10px;
+                        top: 50%;
+                        margin-top: 0px;
+                        display: none;
+                    }
+
+                    &.menu-item-has-children {
+                        .caret {
+                            display: inline-block;
+
+                            &::before {
+                                content: $fa-var-caret-right;
+                                color: $color-blue;
+                            }
+                        }
+                    }
+
+                    .sub-menu {
+                        visibility: hidden;
+                        opacity: 0;
+                        top: 0;
+                        margin-top: 0;
+
+                        li {
+                            .caret {
+                                display: none;
+                            }
+                        }
+                    }
+
+                    &:hover {
+                        .sub-menu {
+                            left: 100%;
+                            margin-left: 0;
+                            opacity: 1;
+                            visibility: visible;
+                        }
+                    }
+                }
+            }
+
+            &:hover {
+                background-color: #fff;
+
+                .sub-menu {
+                    top: 100%;
+                    opacity: 1;
+                    visibility: visible;
+                }
+            }
+
+            &.current_page_item {
+            }
+        }
+    }
+}
