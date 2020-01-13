@@ -28,7 +28,7 @@ class Events
 	*/
 	public function registerEvents()
 	{
-		$this->actions = array(
+		$this->actions = [
 			'wp_ajax_npsort',
 			'wp_ajax_npquickEdit',
 			'wp_ajax_npsyncMenu',
@@ -36,6 +36,7 @@ class Events
 			'wp_ajax_npquickEditLink',
 			'wp_ajax_npgetTaxonomies',
 			'wp_ajax_npnewChild',
+			'wp_ajax_npnewBeforeAfter',
 			'admin_post_npListingSort',
 			'wp_ajax_npEmptyTrash',
 			'admin_post_npSearch',
@@ -46,10 +47,13 @@ class Events
 			'admin_post_npBulkActions',
 			'wp_ajax_npmanualMenuSync',
 			'admin_post_npBulkEdit',
+			'wp_ajax_nptrashWithChildren',
 			'wp_ajax_nppostSearch',
 			'wp_ajax_npWpmlTranslations',
-			'wp_ajax_npresetSettings'
-		);
+			'wp_ajax_npresetSettings',
+			'wp_ajax_npresetUserPreferences',
+			'wp_ajax_npresetAdminMenuSettings'
+		];
 		$this->setHandlers();
 	}
 

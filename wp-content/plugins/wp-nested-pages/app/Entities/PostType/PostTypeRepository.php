@@ -22,7 +22,7 @@ class PostTypeRepository
 	public function setEnabledPostTypes()
 	{
 		$types = get_option('nestedpages_posttypes');
-		$this->enabled_post_types = ( !$types ) ? array() : $types;
+		$this->enabled_post_types = ( !$types ) ? [] : $types;
 	}
 
 	/**
@@ -33,7 +33,7 @@ class PostTypeRepository
 	public function enabledPostTypes()
 	{
 		$types = get_option('nestedpages_posttypes');
-		return ( !$types ) ? array() : $types;
+		return ( !$types ) ? [] : $types;
 	}
 
 	/**
@@ -43,7 +43,7 @@ class PostTypeRepository
 	*/
 	public function getPostTypes($return = 'names')
 	{
-		return get_post_types(array('show_ui'=>true), $return);
+		return get_post_types(['show_ui'=>true], $return);
 	}
 
 	/**
@@ -54,12 +54,12 @@ class PostTypeRepository
 	public function getPostTypesObject()
 	{
 		$all_types = $this->getPostTypes('objects');
-		$post_types = array();
+		$post_types = [];
 		$enabled_types = $this->enabled_post_types;
-		$invalid_types = array(
+		$invalid_types = [
 			'acf-field-group',
 			'attachment'
-		);
+		];
 		foreach($all_types as $key => $type){
 			if ( in_array($type->name, $invalid_types) ) continue;
 			$post_types[$type->name] = new \stdClass();
@@ -79,6 +79,7 @@ class PostTypeRepository
 			$post_types[$type->name]->page_assignment_id = $this->configuredFields($type->name, 'post_type_page_assignment_page_id');
 			$post_types[$type->name]->page_assignment_title = $this->configuredFields($type->name, 'post_type_page_assignment_page_title');
 			$post_types[$type->name]->sort_options = $this->configuredFields($type->name, 'sort_options');
+			$post_types[$type->name]->custom_statuses = $this->configuredFields($type->name, 'custom_statuses');
 		}
 		return $post_types;
 	}
@@ -94,6 +95,27 @@ class PostTypeRepository
 		foreach ( $all_types as $type ){
 			if ( $type->name == $post_type ) $formatted_type = $type;
 		}
+		$row_actions = [
+			'wpml', 
+			'comments', 
+			'insert_before', 
+			'insert_after', 
+			'push_to_top', 
+			'push_to_bottom', 
+			'clone', 
+			'quickedit', 
+			'view', 
+			'trash'
+		];
+		if ( $formatted_type->hierarchical ){
+			$row_actions[] = 'add_child_link';
+			$row_actions[] = 'add_child_page';
+		}
+		$filtered_row_actions = [];
+		foreach ( $row_actions as $action ){
+			if ( apply_filters("nestedpages_row_action_$action", true, $post_type) ) $filtered_row_actions[] = $action;
+		}
+		$formatted_type->row_actions = $filtered_row_actions;
 		return $formatted_type;
 	}
 
@@ -110,6 +132,7 @@ class PostTypeRepository
 			if ( !is_array($type_settings) ) return false;
 			foreach ( $type_settings as $option_key => $setting ){
 				if ( $option_key !== $setting_key ) continue;
+				if ( $setting == 'true' ) return true;
 				return $setting;
 			}
 		}
@@ -124,7 +147,7 @@ class PostTypeRepository
 	*/
 	public function configuredFields($post_type, $field_type = 'custom_fields')
 	{
-		$fields = array();
+		$fields = [];
 		foreach($this->enabled_post_types as $key => $type){
 			if ( $key == $post_type ){
 				if ( isset($type[$field_type]) ) $fields = $type[$field_type];
@@ -169,9 +192,28 @@ class PostTypeRepository
 		if ( empty($options) ) return $enabled;
 		foreach ( $options as $option => $value ){
 			if ( $option == $sort_option && $value == 'true' ) $enabled = true;
+			if ( $option == $sort_option && isset($value['enabled']) ) $enabled = true;
 		}
 		if ( $taxonomy && !isset($options['taxonomies']) ) $enabled = false;
 		if ( $taxonomy && isset($options['taxonomies'][$sort_option]) && $options['taxonomies'][$sort_option] == 'true' ) $enabled = true;
+		return $enabled;
+	}
+
+	/**
+	* Is there a default option set for a sort parameter?
+	* @param $post_type - post type name
+	* @param $sort_option - option to search for
+	*/
+	public function defaultSortOption($post_type, $sort_option)
+	{
+		$enabled = false;
+		$options = $this->configuredFields($post_type, 'sort_options');
+		if ( !is_array($options) ) return $enabled;
+		if ( empty($options) ) return $enabled;
+		foreach ( $options as $option => $value ){
+			if ( $option == $sort_option && isset($value['initial']) ) $enabled = $value['initial'];
+			if ( $option == $sort_option && !isset($value['enabled']) ) $enabled = false;
+		}
 		return $enabled;
 	}
 
@@ -182,7 +224,12 @@ class PostTypeRepository
 	public function hasSortOptions($post_type)
 	{
 		$options = $this->configuredFields($post_type, 'sort_options');
-		return ( empty($options) ) ? false : true;
+		if ( empty($options) ) return false;
+		$enabled = false;
+		foreach ( $options as $option ){
+			if ( isset($option['enabled']) ) $enabled = true;
+		}
+		return $enabled;
 	}
 
 	/**
@@ -193,7 +240,7 @@ class PostTypeRepository
 	public function thumbnails($post_type, $key = 'enabled')
 	{
 		$types = $this->enabled_post_types;
-		$type_settings = array();
+		$type_settings = [];
 		foreach ( $types as $type => $settings ){
 			if ( $type !== $post_type ) continue;
 			$type_settings = $settings;
@@ -217,7 +264,7 @@ class PostTypeRepository
 	public function thumbnailDisplaySize($post_type)
 	{
 		$types = $this->enabled_post_types;
-		$type_settings = array();
+		$type_settings = [];
 		foreach ( $types as $type => $settings ){
 			if ( $type !== $post_type ) continue;
 			$type_settings = $settings;
@@ -318,8 +365,8 @@ class PostTypeRepository
 	public function getTaxonomies($post_type, $hierarchical = true)
 	{
 		$taxonomy_names = get_object_taxonomies( $post_type );
-		$hierarchical_taxonomies = array();
-		$flat_taxonomies = array();
+		$hierarchical_taxonomies = [];
+		$flat_taxonomies = [];
 		foreach ( $taxonomy_names as $taxonomy_name ) {
 			$taxonomy = get_taxonomy( $taxonomy_name );
 			if ( !$taxonomy->show_ui )continue;
@@ -363,7 +410,8 @@ class PostTypeRepository
 	*/
 	public function getSubmenuText($post_type)
 	{
-		return ( $post_type->hierarchical ) ? __('Nested View', 'wp-nested-pages') : __('Sort View', 'wp-nested-pages');
+		$label = ( $post_type->hierarchical ) ? __('Nested View', 'wp-nested-pages') : __('Sort View', 'wp-nested-pages'); 
+		return apply_filters('nestedpages_sortview_text', $label, $post_type);
 	}
 
 	/**
@@ -392,8 +440,8 @@ class PostTypeRepository
 	*/
 	private function fieldsArray($results)
 	{
-		$fields = array();
-		$exclude = array('_wp_page_template', '_edit_lock', '_edit_last', '_wp_trash_meta_status', '_wp_trash_meta_time', 'layout', 'position', 'rule', 'hide_on_screen', '_np_link_target', '_np_nav_title', '_np_title_attribute', '_np_nav_status', '_nested_pages_status', '_np_nav_css_classes');
+		$fields = [];
+		$exclude = ['_wp_page_template', '_edit_lock', '_edit_last', '_wp_trash_meta_status', '_wp_trash_meta_time', 'layout', 'position', 'rule', 'hide_on_screen', '_np_link_target', '_np_nav_title', '_np_title_attribute', '_np_nav_status', '_nested_pages_status', '_np_nav_css_classes'];
 		foreach ( $results as $field ){
 			if ( !in_array($field->meta_key, $exclude) ) 
 				array_push($fields, $field->meta_key);
@@ -407,10 +455,35 @@ class PostTypeRepository
 	public function getAssignedPages()
 	{
 		$post_types = $this->getPostTypesObject();
-		$array = array();
+		$array = [];
 		foreach($post_types as $type => $options){
 			if ( isset($options->page_assignment) && $options->page_assignment == 'true' && isset($options->page_assignment_id) && $options->page_assignment_id !== '' ) $array[$options->page_assignment_id] = $type;
 		}
 		return $array;
+	}
+
+	/**
+	* Get quick edit post statuses for the post type
+	*/
+	public function quickEditStatuses($post_type)
+	{
+		$custom_statuses = ( isset($this->enabled_post_types[$post_type]['custom_statuses']) && !empty($this->enabled_post_types[$post_type]['custom_statuses']) ) ? $this->enabled_post_types[$post_type]['custom_statuses'] : null;
+		$statuses = [
+			'can_publish' => [
+				'publish' => __('Published', 'wp-nested-pages'),
+				'future' => __('Scheduled', 'wp-nested-pages'),
+			],
+			'other' => [
+				'pending' => __('Pending Review', 'wp-nested-pages'),
+				'draft' => __('Draft', 'wp-nested-pages'),
+			]
+		];
+		if ( $custom_statuses ) :
+			global $wp_post_statuses;
+			foreach ( $custom_statuses as $custom_status ) {
+				$statuses['other'][$custom_status] = $wp_post_statuses[$custom_status]->label;
+			}
+		endif;
+		return apply_filters('nestedpages_quickedit_post_statuses', $statuses, $post_type);
 	}
 }

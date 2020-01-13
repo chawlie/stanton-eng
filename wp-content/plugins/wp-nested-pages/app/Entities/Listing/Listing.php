@@ -11,6 +11,7 @@ use NestedPages\Entities\Listing\ListingRepository;
 use NestedPages\Entities\Listing\ListingQuery;
 use NestedPages\Config\SettingsRepository;
 use NestedPages\Entities\PluginIntegration\IntegrationFactory;
+use NestedPages\Entities\PostType\PostTypeCustomFields;
 
 /**
 * Primary Post Listing
@@ -88,6 +89,11 @@ class Listing
 	private $settings;
 
 	/**
+	* Custom Field Repository
+	*/
+	private $custom_fields_repo;
+
+	/**
 	* Post Type Settings
 	* @var object from post type repo
 	*/
@@ -133,6 +139,7 @@ class Listing
 		$this->listing_query = new ListingQuery;
 		$this->post_data_factory = new PostDataFactory;
 		$this->settings = new SettingsRepository;
+		$this->custom_fields_repo = new PostTypeCustomFields;
 		$this->setTaxonomies();
 		$this->setPostTypeSettings();
 		$this->setStandardFields();
@@ -147,7 +154,7 @@ class Listing
 	{
 		$class_name = get_class();
 		$classinstance = new $class_name($post_type);
-		return array(&$classinstance, "listPosts");
+		return [&$classinstance, "listPosts"];
 	}
 
 	/**
@@ -175,7 +182,7 @@ class Listing
 	private function setStickyPosts()
 	{
 		$this->sticky_posts = get_option('sticky_posts');
-		if ( !$this->sticky_posts ) $this->sticky_posts = array();
+		if ( !$this->sticky_posts ) $this->sticky_posts = [];
 	}
 
 	/**
@@ -195,7 +202,7 @@ class Listing
 	{
 		// The standard fields checkbox is explicitly not set
 		if ( isset($this->post_type_settings->standard_fields_enabled) && !$this->post_type_settings->standard_fields_enabled ){
-			$this->disabled_standard_fields = array();
+			$this->disabled_standard_fields = [];
 			return;
 		}
 
@@ -206,8 +213,55 @@ class Listing
 			}
 			return;
 		}
-		$this->disabled_standard_fields = array();
+		$this->disabled_standard_fields = [];
 		return;
+	}
+
+	/**
+	* Get the Post States
+	*/
+	private function postStates($assigned_pt)
+	{
+		$out = '';
+		$post_states = [];
+		if ( !$assigned_pt ) {
+			if ( $this->post->id == get_option('page_on_front') ) $post_states['page_on_front'] = __('Front Page', 'wp-nested-pages');
+			if ( $this->post->id == get_option('page_for_posts') ) $post_states['page_for_posts'] = __('Posts Page', 'wp-nested-pages');
+		}
+		$post_states = apply_filters('display_post_states', $post_states, $this->post);
+		if ( empty($post_states) ) return $out;
+		$state_count = count($post_states);
+		$i = 0;
+		foreach ( $post_states as $state ) {
+			++$i;
+			( $i == $state_count ) ? $sep = '' : $sep = ', ';
+			$out .= " <em class='np-page-type'><strong>&ndash; $state</strong>$sep</em>";
+		}
+		return $out;
+	}
+
+	/**
+	* Row Actions
+	* Adds assigned pt actions as well as any custom actions registered through page_row_actions filter
+	*/
+	private function rowActions($assigned_pt)
+	{
+		$actions = [];
+		if ( $assigned_pt ) {
+			if ( current_user_can('publish_posts') ) $actions['add_new'] = '<a href="' . $this->post_type_repo->addNewPostLink($assigned_pt->name) . '">' . $assigned_pt->labels->add_new . '</a>';
+			$actions['view_all'] = '<a href="' .  $this->post_type_repo->allPostsLink($assigned_pt->name) . '">' . $assigned_pt->labels->all_items . ' (' . $this->listing_repo->postCount($assigned_pt->name) . ')</a>';
+		}
+		$actions = apply_filters('post_row_actions', $actions, $this->post);
+		if ( $this->post_type->name == 'page' ) $actions = apply_filters('page_row_actions', $actions, $this->post);
+		if ( empty($actions) ) return null;
+		$out = '<ul class="np-assigned-pt-actions">';
+		foreach ( $actions as $key => $action ){
+			$out .= '<li class="' . $key;
+			if ( $key == 'add_new' || $key == 'view_all' ) $out .= ' visible';
+			$out .= '">' . $action . '</li>';
+		}		
+		$out .= '</ul>';
+		return $out;
 	}
 
 	/**
@@ -239,7 +293,7 @@ class Listing
 		if ( $this->post_type_settings->disable_sorting ) $sortable = false;
 
 		// Get array of child pages
-		$children = array();
+		$children = [];
 		$all_children = $pages;
 		foreach($all_children as $child){
 			array_push($children, $child->ID);
@@ -249,9 +303,11 @@ class Listing
 
 		$list_classes = 'sortable visible nplist';
 		if ( !$this->user->canSortPages() || !$sortable || $this->listing_repo->isSearch() ) $list_classes .= ' no-sort';
+		if ( $this->listing_repo->isOrdered($this->post_type->name) ) $list_classes .= ' no-sort';
 		if ( $this->integrations->plugins->wpml->installed && $this->integrations->plugins->wpml->getCurrentLanguage() == 'all' ) $list_classes .= ' no-sort';
 		if ( $this->integrations->plugins->yoast->installed ) $list_classes .= ' has-yoast';
 		if ( $this->listing_repo->isSearch() ) $list_classes .= ' np-search-results';
+		if ( $this->settings->nonIndentEnabled() ) $list_classes .= ' non-indent';
 
 		// Primary List
 		if ( $count == 0 ) {
@@ -319,6 +375,7 @@ class Listing
 			$pages = $this->all_posts;
 			echo '<ol class="sortable no-sort nplist visible">';
 		}
+		if ( !$pages ) return;
 		
 		foreach($pages as $page) :
 
@@ -356,11 +413,20 @@ class Listing
 				$row_view = ( $this->post->type !== 'np-redirect' ) ? 'partials/row' : 'partials/row-link';
 
 				// CSS Classes for the <li> row element
+				$template = ( $this->post->template )
+					? ' tpl-' .  str_replace('.php', '', $this->post->template)
+					: '';
+
 				$row_classes = '';
 				if ( !$this->post_type->hierarchical ) $row_classes .= ' non-hierarchical';
 				if ( !$this->user->canSortPages() ) $row_classes .= ' no-sort';
 				if ( $wpml_current_language == 'all' ) $row_classes .= ' no-sort';
-				if ( $this->listing_repo->isSearch() ) $row_classes .= ' search';
+				if ( $this->listing_repo->isSearch() || $this->listing_repo->isOrdered($this->post_type->name) ) $row_classes .= ' search';
+				if ( $this->post->template ) $row_classes .= $template;
+
+				// Filter sortable per post
+				$filtered_sortable = apply_filters('nestedpages_post_sortable', true, $this->post, $this->post_type);
+				if ( !$filtered_sortable && $this->user->canSortPages() && $this->post_type->hierarchical && !$wpml_current_language ) $row_classes .= ' no-sort-filtered';
 
 				// Page Assignment for Post Type
 				$assigned_pt = ( $this->listing_repo->isAssignedPostType($this->post->id, $this->assigned_pt_pages) ) 

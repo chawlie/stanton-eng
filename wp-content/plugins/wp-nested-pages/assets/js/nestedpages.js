@@ -1,61 +1,6 @@
 var NestedPages = NestedPages || {};
 
 /**
-* Responsive functionality for nested view
-* @package Nested Pages
-* @author Kyle Phillips - https://github.com/kylephillips/wp-nested-pages
-*/
-NestedPages.Responsive = function()
-{
-	var plugin = this;
-	var $ = jQuery;
-
-	plugin.init = function()
-	{
-		plugin.bindEvents();
-	}
-
-	plugin.bindEvents = function()
-	{
-		$(document).on('click', NestedPages.selectors.toggleEditButtons, function(e){
-			e.preventDefault();
-			plugin.toggleEdit($(this));
-		});
-		// Remove the block display when sizing up
-		$(window).resize(function() {
-			plugin.timer(function(){
-				$('.action-buttons').removeAttr('style');
-				$('.np-toggle-edit').removeClass('active');
-			}, 500);
-		});
-	}
-
-	// Toggle the responsive edit buttons
-	plugin.toggleEdit = function(button)
-	{
-		var buttons = $(button).siblings('.action-buttons');
-		if ( $(buttons).is(':visible') ){
-			$(button).removeClass('active');
-			$(buttons).hide();
-			return;
-		}
-		$(button).addClass('active');
-		$(buttons).show();
-	}
-
-	plugin.timer = (function(){
-		var timer = 0;
-		return function(callback, ms){
-			clearTimeout (timer);
-			timer = setTimeout(callback, ms);
-		};
-	})();
-
-	return plugin.init();
-}
-var NestedPages = NestedPages || {};
-
-/**
 * Formatting updates
 * @package Nested Pages
 * @author Kyle Phillips - https://github.com/kylephillips/wp-nested-pages
@@ -75,12 +20,19 @@ NestedPages.Formatter = function()
 			var button = allButtons[i];
 			var row = $(button).parent('.row').parent('li');
 			if ( $(row).children('ol').length > 0 ){ // Row has a child menu
-				
-				var icon = ( $(row).children('ol:visible').length > 0 ) 
-					? NestedPages.cssClasses.iconToggleDown 
-					: NestedPages.cssClasses.iconToggleRight;
 
-				$(button).html('<div class="child-toggle-spacer"></div><a href="#"><i class="' + icon + '"></i></a>');
+				// Hide the toggle and child list if all items are in the trash
+				if ( $(row).children('ol').find('li.page-row').length < 1 ){
+					$(row).children('ol').hide();
+					continue;
+				}
+				
+				var open = ( $(row).children('ol:visible').length > 0 ) ? true : false;
+				var html = '<div class="child-toggle-spacer"></div>';
+				html += '<a href="#"';
+				if ( open ) html += ' class="open"';
+				html += '><span class="np-icon-arrow"></span></a>';
+				$(button).html(html);
 
 				if ( ($(row).children('ol').children('.np-hide').length > 0) && ($(row).children('ol').children('.np-hide.shown').length === 0) ){
 					$(button).find('a').hide();
@@ -108,6 +60,32 @@ NestedPages.Formatter = function()
 	// Adjust nested margins based on how deep the list is nested
 	plugin.setNestedMargins = function()
 	{
+		plugin.setIndent();
+	}
+
+	plugin.setIndent = function()
+	{
+		var amount = ( nestedpages.non_indent === '1' ) ? 20 : 30;
+		var indent_element = ( nestedpages.non_indent === '1' ) ? '.row-inner' : '.child-toggle';
+		$.each($(NestedPages.selectors.lists), function(i, v){
+			var parent_count = $(this).parents(NestedPages.selectors.lists).length;
+			var padding = 0;
+			if ( !NestedPages.jsData.sortable ) padding = 10;
+			if ( parent_count > 0 ){
+				var padding = ( parent_count * amount ) + padding;
+				$(this).find(indent_element).css('padding-left', padding + 'px');
+				return;
+			}
+			if ( !NestedPages.jsData.sortable || $(this).hasClass('no-sort') ){
+				$(this).find('.row-inner').css('padding-left', '10px');	
+				return;
+			}
+			$(this).find('.row-inner').css('padding-left', '0px');
+		});
+	}
+
+	plugin.setClassicIndent = function()
+	{
 		$.each($(NestedPages.selectors.lists), function(i, v){
 			var parent_count = $(this).parents(NestedPages.selectors.lists).length;
 			var padding = 0;
@@ -117,7 +95,7 @@ NestedPages.Formatter = function()
 				$(this).find('.row-inner').css('padding-left', padding + 'px');
 				return;
 			}
-			if ( !NestedPages.jsData.sortable ){
+			if ( !NestedPages.jsData.sortable || $(this).hasClass('no-sort') ){
 				$(this).find('.row-inner').css('padding-left', '10px');	
 				return;
 			}
@@ -208,6 +186,208 @@ NestedPages.Formatter = function()
 		});
 	}
 
+}
+var NestedPages = NestedPages || {};
+/**
+* Dropdowns
+* 
+* @author Kyle Phillips
+* 
+* To use, wrap dropdown content and toggle link/button in an element with data attribute of data-dropdown
+* Give content data attribute of data-dropdown-content and toggle element data attribute of data-dropdown-toggle
+* For CSS, wrapping/parent element gets class of "dropdown", content gets class of "dropdown-content"
+*/
+NestedPages.Dropdowns = function()
+{
+	var self = this;
+	var $ = jQuery;
+
+	self.dropdown = ''; // The Active Dropdown
+	self.activeBtn = ''; // The Active Button
+	self.activeContent = ''; // The Active Dropdown Content
+	self.toggleBtn = '[data-dropdown-toggle]';
+	self.dropdownContainer = '[data-dropdown]';
+	self.dropdownContent = '[data-dropdown-content]'
+
+	self.selectors = {
+		caret_up : 'icon-arrow_drop_up',
+		caret_down : 'icon-arrow_drop_down'
+	}
+
+	self.bindEvents = function()
+	{
+		$(document).on('click', self.toggleBtn, function(e){
+			e.preventDefault();
+			self.activeBtn = $(this);
+			self.dropdown = $(this).parents(self.dropdownContainer);
+			self.toggleDropdown();
+		});
+		$(document).on('click', function(e){
+			self.closeDropdowns(e.target);
+		});
+		$(document).on('dropdown-opened', function(e, content){
+			if ( $(content).parents(NestedPages.selectors.row).length > 0 ){
+				$(content).parents(NestedPages.selectors.row).addClass('active');
+			}
+		});
+		$(document).on('dropdown-closed', function(){
+			$(NestedPages.selectors.row).removeClass('active');
+		});
+	}
+
+	self.toggleDropdown = function()
+	{
+		$('.' + self.selectors.caret_up).attr('class', self.selectors.caret_down);
+		var content = $(self.dropdown).find(self.dropdownContent);
+		self.activeContent = content;
+		if ( $(content).hasClass('active') ){
+			$(content).removeClass('active');
+			$(self.activeBtn).removeClass('active');
+			$(self.activeBtn).find('.' + self.selectors.caret_up).attr('class', self.selectors.caret_down);
+			$(document).trigger('dropdown-closed', content);
+			return;
+		}
+		self.setPositioning();
+		$(self.toggleBtn).removeClass('active');
+		$(self.dropdownContent).removeClass('active');
+		$(content).addClass('active');
+		$(self.activeBtn).find('.' + self.selectors.caret_down).attr('class', self.selectors.caret_up);
+		$(self.activeBtn).addClass('active');
+		$(document).trigger('dropdown-opened', content);
+	}
+
+
+	self.setPositioning = function()
+	{
+		var buttonHeight = $(self.activeBtn).outerHeight();
+		$(self.activeContent).css('top', buttonHeight + 'px');
+	}
+
+	self.closeDropdowns = function(target)
+	{
+		if ( $(target).parents(self.dropdownContainer).length === 0 ){
+			$(self.dropdownContent).removeClass('active');
+			$(self.toggleBtn).removeClass('active');
+			$(self.activeBtn).find('.' + self.selectors.caret_up).attr('class', self.selectors.caret_down);
+			var content;
+			$(document).trigger('dropdown-closed', content);
+		}
+	}
+
+	return self.bindEvents();
+}
+var NestedPages = NestedPages || {};
+/**
+* Modal Windows
+* 
+* @author Kyle Phillips
+* 
+* To use, include a modal backdrop and modal content window with the appropriate data-attributes
+* The data attributes should match the value of the toggle buttons data-modal-toggle attribute
+*/
+NestedPages.Modals = function()
+{
+	var self = this;
+	var $ = jQuery;
+
+	self.activeBtn = '';
+	self.activeModal = '';
+	self.modalOpen = false;
+
+	self.selectors = {
+		toggleBtn : '[data-nestedpages-modal-toggle]',
+		backdrop : '[data-nestedpages-modal-backdrop]',
+		closeBtn : '[data-nestedpages-modal-close]',
+		title : 'data-nestedpages-modal-title',
+		content : 'data-nestedpages-modal-content'
+	}
+
+	self.bindEvents = function()
+	{
+		$(document).on('click', self.selectors.toggleBtn, function(e){
+			e.preventDefault();
+			self.activeBtn = $(this);
+			self.openModal();
+		});
+		$(document).on('click', self.selectors.closeBtn, function(e){
+			e.preventDefault();
+			self.closeModals();
+		});
+		$(document).on('open-modal-manual', function(e, modal){
+			self.activeModal = $('[data-nestedpages-modal="' + modal + '"]');
+			self.openModal();
+		});
+		$(document).on('close-modal-manual', function(e){
+			self.closeModals();
+		});
+		$(document).on('click', self.selectors.backdrop, function(e){
+			self.closeModals();
+		});
+		$(document).ready(function(){
+			self.checkHash();
+		});
+	}
+
+	/**
+	* Open the Modal Window
+	*/
+	self.openModal = function()
+	{
+		if ( self.modalOpen ){
+			self.closeModals();
+			return;
+		}
+		if ( $(self.activeBtn).length > 0 ){
+			var modal = $(self.activeBtn).attr('data-nestedpages-modal-toggle');
+			self.activeModal = $('*[data-nestedpages-modal="' + modal + '"]');
+		}
+		$(self.activeModal).addClass('active');
+		self.modalOpen = true;
+		self.populateModal();
+		$(document).trigger('open-modal', [self.activeBtn, self.activeModal]);
+	}
+
+	/**
+	* Close the Modal Window
+	*/
+	self.closeModals = function()
+	{
+		self.modalOpen = false;
+		$('[data-nestedpages-modal]').removeClass('active');
+		self.activeModal = '';
+		self.activeBtn = '';
+	}
+
+	/**
+	* Populate the Modal if needed
+	*/
+	self.populateModal = function()
+	{
+		var title = $(self.activeBtn).attr(self.selectors.title);
+		if ( typeof title !== 'undefined' && title !== '' ){
+			$(self.activeModal).find('[data-nestedpages-modal-title]').text(title);
+		}
+		var content = $(self.activeBtn).attr(self.selectors.content);
+		if ( typeof content !== 'undefined' && content !== '' ){
+			$(self.activeModal).find('[data-nestedpages-modal-content]').html(content);
+		}
+	}
+
+	/**
+	* Check for Hash
+	*/
+	self.checkHash = function()
+	{
+		if ( !window.location.hash ) return;
+		var hashType = window.location.hash.substring(0, 6);
+		if ( hashType !== '#modal' ) return;
+		
+		var modalId = window.location.hash.substring(7);
+		self.activeModal = $('*[data-nestedpages-modal="' + modalId + '"]');
+		self.openModal();
+	}
+
+	return self.bindEvents();
 }
 var NestedPages = NestedPages || {};
 
@@ -459,6 +639,7 @@ NestedPages.BulkActions = function()
 	{
 		plugin.toggleLinkCountAlert();
 		if ( visible ){
+			plugin.disableParentOptions();
 			$(NestedPages.selectors.bulkEditForm).show();
 			$(NestedPages.selectors.bulkActionsForm).hide();
 			plugin.setWPSuggest();
@@ -485,6 +666,18 @@ NestedPages.BulkActions = function()
 	}
 
 	/**
+	* Set parent options to disabled for selected posts
+	*/
+	plugin.disableParentOptions = function()
+	{
+		var selectElement = $(NestedPages.selectors.bulkEditForm).find('select[name=post_parent]');
+		for ( var i = 0; i < plugin.selectedPosts.length; i++ )
+		{
+			$(selectElement).find('option[value=' + plugin.selectedPosts[i].id + ']').attr('disabled', true);
+		}
+	}
+
+	/**
 	* Initialize WP Auto Suggest on Flat Taxonomy fields
 	*/
 	plugin.setWPSuggest = function()
@@ -504,6 +697,7 @@ NestedPages.BulkActions = function()
 		var selectFields = $(NestedPages.selectors.bulkEditForm).find('select');
 		$.each(selectFields, function(){
 			$(this).find('option').first().prop('selected', true);
+			$(this).find('option').removeAttr('disabled');
 		});
 		var categoryChecklists = $(NestedPages.selectors.bulkEditForm).find('.cat-checklist');
 		$.each(categoryChecklists, function(){
@@ -597,9 +791,7 @@ NestedPages.MenuToggle = function()
 	plugin.toggleSingleMenu = function(button)
 	{
 		var submenu = $(button).parent(NestedPages.selectors.childToggle).parent(NestedPages.selectors.row).siblings('ol');
-		$(button).find('i')
-			.toggleClass(NestedPages.cssClasses.iconToggleDown)
-			.toggleClass(NestedPages.cssClasses.iconToggleRight);
+		$(button).toggleClass('open');
 		$(submenu).toggle();
 		plugin.formatter.setBorders();
 		plugin.formatter.setNestedMargins();
@@ -614,8 +806,7 @@ NestedPages.MenuToggle = function()
 		if ( $(button).attr('data-toggle') === 'closed' ){
 			$(NestedPages.selectors.lists).show();
 			$(button).attr('data-toggle', 'opened').text(NestedPages.jsData.collapseText);
-			$(NestedPages.selectors.childToggle).find('i').removeClass(NestedPages.cssClasses.iconToggleRight).addClass(NestedPages.cssClasses.iconToggleDown);
-			// revert_quick_edit();
+			$(NestedPages.selectors.childToggle + ' a').addClass('open');
 			plugin.formatter.setBorders();
 			plugin.syncUserToggles();
 			return;
@@ -623,8 +814,7 @@ NestedPages.MenuToggle = function()
 		
 		$(NestedPages.selectors.lists).not($(NestedPages.selectors.lists)[0]).hide();
 		$(button).attr('data-toggle', 'closed').text(NestedPages.jsData.expandText);
-		$(NestedPages.selectors.childToggle).find('i').removeClass(NestedPages.cssClasses.iconToggleDown).addClass(NestedPages.cssClasses.iconToggleRight);
-		// revert_quick_edit();
+		$(NestedPages.selectors.childToggle + ' a').removeClass('open');
 		plugin.formatter.setBorders();
 		plugin.syncUserToggles();
 	}
@@ -764,37 +954,68 @@ NestedPages.Nesting = function()
 
 	plugin.formatter = new NestedPages.Formatter;
 
-
 	// Make the Menu sortable
 	plugin.initializeSortable = function()
 	{
-		maxLevels = ( NestedPages.jsData.nestable ) ? 0 : 1;
+		if ( !NestedPages.jsData.nestable ) return plugin.initializeSortableFlat();
+
 		$(NestedPages.selectors.sortable).not(NestedPages.selectors.notSortable).nestedSortable({
 			items : NestedPages.selectors.rows,
 			toleranceElement: '> .row',
 			handle: NestedPages.selectors.handle,
 			placeholder: "ui-sortable-placeholder",
-			maxLevels: maxLevels,
 			tabSize : 56,
+			isAllowed: function(placeholder, placeholderParent, currentItem){
+				return ( $(placeholderParent).hasClass('post-type-np-redirect') && !$(currentItem).hasClass('post-type-np-redirect') ) ? false : true;
+			},
 			start: function(e, ui){
-        		ui.placeholder.height(ui.item.height());
-    		},
-    		sort: function(e, ui){
-    			plugin.formatter.updatePlaceholderWidth(ui);
-    		},
-    		stop: function(e, ui){
-    			setTimeout(
-    				function(){
-    					plugin.formatter.updateSubMenuToggle();
-    					plugin.formatter.setBorders();
-    					plugin.formatter.setNestedMargins();
-    				}, 100
-    			);
-    			plugin.syncNesting();
-    		},
+				ui.placeholder.height(ui.item.height());
+			},
+			sort: function(e, ui){
+				plugin.formatter.updatePlaceholderWidth(ui);
+			},
+			stop: function(e, ui){
+				setTimeout(
+					function(){
+						plugin.formatter.updateSubMenuToggle();
+						plugin.formatter.setBorders();
+						plugin.formatter.setNestedMargins();
+					}, 100
+				);
+				plugin.syncNesting();
+			},
 		});
 	}
 
+	// Initialize Flat Sortable (Non-Hierarchical Post Types)
+	plugin.initializeSortableFlat = function()
+	{
+		var lists = $(NestedPages.selectors.lists).not(NestedPages.selectors.notSortable);
+		$.each(lists, function(){
+			$(this).sortable({
+				items : '>' + NestedPages.selectors.rows,
+				handle: NestedPages.selectors.handle,
+				placeholder: "ui-sortable-placeholder",
+				forcePlaceholderSize: true,
+				start: function(e, ui){
+					ui.placeholder.height(ui.item.height());
+				},
+				sort: function(e, ui){
+					plugin.formatter.updatePlaceholderWidth(ui);
+				},
+				stop: function(e, ui){
+					setTimeout(
+						function(){
+							plugin.formatter.updateSubMenuToggle();
+							plugin.formatter.setBorders();
+							plugin.formatter.setNestedMargins();
+						}, 100
+					);
+					plugin.syncNesting();
+				},
+			});
+		});
+	}
 
 	// Disable Nesting
 	plugin.disableNesting = function()
@@ -806,11 +1027,17 @@ NestedPages.Nesting = function()
 	// Sync Nesting
 	plugin.syncNesting = function(manual, callback)
 	{
+		var list;
+
 		if ( nestedpages.manual_order_sync === '1' && !manual) return;
 		$(NestedPages.selectors.errorDiv).hide();
 		$(NestedPages.selectors.loadingIndicator).show();
-
-		list = $(NestedPages.selectors.sortable).nestedSortable('toHierarchy', {startDepthCount: 0});
+		if ( NestedPages.jsData.nestable ){
+			list = $(NestedPages.selectors.sortable).nestedSortable('toHierarchy', {startDepthCount: 0});
+		} else {
+			list = plugin.setNestingArray();
+		}
+		
 		plugin.disableNesting();
 
 		var syncmenu = NestedPages.jsData.syncmenu;
@@ -843,6 +1070,34 @@ NestedPages.Nesting = function()
 		});
 	}
 
+	plugin.setNestingArray = function(list)
+	{
+		ret = [];
+		$(NestedPages.selectors.lists).first().children('li.page-row').each(function() {
+			var level = plugin.recursiveNesting(this);
+			ret.push(level);
+		});
+		return ret;
+	}
+
+	plugin.recursiveNesting = function(item) {
+		var id = $(item).attr('id');
+		var currentItem;
+		if (id) {
+			id = id.replace('menuItem_', '');
+			currentItem = {
+				"id": id
+			};
+			if ($(item).children(NestedPages.selectors.lists).children(NestedPages.selectors.rows).length > 0) {
+				currentItem.children = [];
+				$(item).children(NestedPages.selectors.lists).children(NestedPages.selectors.rows).each(function() {
+					var level = plugin.recursiveNesting(this);
+					currentItem.children.push(level);
+				});
+			}
+			return currentItem;
+		}
+	}
 }
 var NestedPages = NestedPages || {};
 
@@ -898,6 +1153,9 @@ NestedPages.SyncMenuSetting = function()
 					plugin.formatter.showAjaxError(data.message);
 				}
 			},
+			error: function(data){
+				console.log(data);
+			}
 		});
 	}
 
@@ -922,9 +1180,11 @@ NestedPages.NewPost = function()
 
 	plugin.bindEvents = function()
 	{
-		$(document).on('click', NestedPages.selectors.openPageModal, function(e){
-			e.preventDefault();
-			plugin.openModal();
+		$(document).on('open-modal', function(e, button, modal){
+			var target = $(button).attr('data-nestedpages-modal-toggle');
+			if ( typeof target !== 'undefined' && target == 'np-bulk-modal' ){
+				plugin.openModal();
+			}
 		});
 		$(document).on('submit', NestedPages.selectors.newPageForm, function(e){
 			e.preventDefault();
@@ -945,16 +1205,23 @@ NestedPages.NewPost = function()
 			e.preventDefault();
 			plugin.openQuickEdit($(this));
 		});
-		$(NestedPages.selectors.newPageModal).on('hide.bs.modal', function(){
-			plugin.cancelNewPage();
-		});
-		$(NestedPages.selectors.newPageModal).on('shown.bs.modal', function(){
-			plugin.modalOpened($(this));
-		});
 		$(document).on('click', NestedPages.selectors.cancelNewChildButton, function(e){
 			e.preventDefault();
 			plugin.cancelNewPage();
-			$(NestedPages.selectors.newPageModal).modal('hide');
+		});
+		$(document).on('click', '[' + NestedPages.selectors.newBeforeButton + ']', function(e){
+			e.preventDefault();
+			plugin.openQuickEdit($(this));
+		});
+		$(document).on('click', '[' + NestedPages.selectors.newAfterButton + ']', function(e){
+			e.preventDefault();
+			plugin.openQuickEdit($(this));
+		});
+		$(document).on('keydown', function(e){
+			if ( e.keyCode === 27 ) {
+				plugin.cancelNewPage();
+				$(document).click(); // Close Dropdown
+			}
 		});
 	}
 
@@ -966,19 +1233,19 @@ NestedPages.NewPost = function()
 		$(NestedPages.selectors.newPageModal).find('.modal-body').html(newform);
 		$(NestedPages.selectors.newPageModal).find('h3').text(nestedpages.add_multiple);
 		$(NestedPages.selectors.newPageModal).find('.page_parent_id').val(plugin.parent_id);
-		$(NestedPages.selectors.newPageModal).modal('show');
-	}
-
-	// Modal has opened, set the attributes
-	plugin.modalOpened = function(modal)
-	{
-		$(modal).find('.np_title').focus();
-		$(modal).find(NestedPages.selectors.newPageTitle).prop('tabindex', '2');
+		$(newform).find('.np_title').first().focus();
+		$(newform).find(NestedPages.selectors.newPageTitle).first().prop('tabindex', '2');
 	}
 
 	// Open the new child quick edit
 	plugin.openQuickEdit = function(button)
 	{
+		var before = $(button).attr(NestedPages.selectors.newBeforeButton);
+		before = ( typeof before === 'undefined' || before === '' ) ? false : before;
+
+		var after = $(button).attr(NestedPages.selectors.newAfterButton);
+		after = ( typeof after === 'undefined' || after === '' ) ? false : after;
+
 		var parent_li = $(button).closest(NestedPages.selectors.row).parent('li');
 		var newform = $(NestedPages.selectors.newPageFormContainer).clone();
 
@@ -990,12 +1257,23 @@ NestedPages.NewPost = function()
 			$(newform).appendTo(parent_li);
 		}
 
+
 		$(newform).siblings(NestedPages.selectors.row).hide();
 
 		plugin.formatter.showQuickEdit();
 
 		$(newform).find('.parent_name').html('<em>Parent:</em> ' + $(button).attr('data-parentname'));
-		$(newform).find('.page_parent_id').val($(button).attr('data-id'));
+		if ( !before && !after ) $(newform).find('.page_parent_id').val($(button).attr('data-id'));
+
+		if ( before ) {
+			$(newform).find('.page_before_id').val(before);
+			$(newform).find('[data-new-post-relation-title]').text(nestedpages.insert_before + ': ' + $(button).attr('data-parentname'));
+		}
+		if ( after ) {
+			$(newform).find('.page_after_id').val(after);
+			$(newform).find('[data-new-post-relation-title]').text(nestedpages.insert_after + ': ' + $(button).attr('data-parentname'));
+		}
+
 		$(newform).show();
 		$(newform).find('.np_title').focus();
 		$(newform).find(NestedPages.selectors.newPageTitle).prop('tabindex', '2');
@@ -1016,7 +1294,7 @@ NestedPages.NewPost = function()
 	{		
 		var form = $(button).parents('form');
 		var fieldcount = $(button).siblings('.new-page-titles').children('li').length + 1;
-		var html = '<li><i class="handle np-icon-menu"></i><div class="form-control new-child-row"><label>' + NestedPages.jsData.titleText + '</label><div><input type="text" name="post_title[]" class="np_title" placeholder="' + NestedPages.jsData.titleText + '" value="" tabindex="' + fieldcount + '" /><a href="#" class="button-secondary np-remove-child">-</a></div></div></li>';
+		var html = '<li><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" class="handle np-icon-menu"><path d="M0 0h24v24H0z" fill="none" /><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" class="bars" /></svg><div class="form-control new-child-row"><label>' + NestedPages.jsData.titleText + '</label><div><input type="text" name="post_title[]" class="np_title" placeholder="' + NestedPages.jsData.titleText + '" value="" tabindex="' + fieldcount + '" /><a href="#" class="button-secondary np-remove-child">-</a></div></div></li>';
 		var container = $(button).siblings('.new-page-titles').append(html);
 		$(form).find('.np_title').last().focus();
 		$(form).find(NestedPages.selectors.newPageTitle).prop('tabindex', fieldcount++);
@@ -1024,12 +1302,15 @@ NestedPages.NewPost = function()
 			items : 'li',
 			handle: '.handle',
 		});
+		plugin.toggleAddEditButton(form);
 	}
 
 	// Remove a page title field
 	plugin.removeTitleField = function(button)
 	{
+		var form = $(button).parents('form');
 		$(button).parents('.new-child-row').parent('li').remove();
+		plugin.toggleAddEditButton(form);
 	}
 
 	// Submit the New Page Form
@@ -1039,12 +1320,15 @@ NestedPages.NewPost = function()
 		plugin.form = $(button).parents('form');
 
 		var addedit = ( $(button).hasClass('add-edit') ) ? true : false;
-
+		var action = NestedPages.formActions.newPage;
+		if ( $(plugin.form).find('.page_before_id').val() !== '' ) action = NestedPages.formActions.newBeforeAfter;
+		if ( $(plugin.form).find('.page_after_id').val() !== '' ) action = NestedPages.formActions.newBeforeAfter;
+		
 		$.ajax({
 			url: NestedPages.jsData.ajaxurl,
 			type: 'post',
 			datatype: 'json',
-			data: $(plugin.form).serialize() + '&action=' + NestedPages.formActions.newPage + '&nonce=' + NestedPages.jsData.nonce + '&syncmenu=' + NestedPages.jsData.syncmenu + '&post_type=' + NestedPages.jsData.posttype,
+			data: $(plugin.form).serialize() + '&action=' + action + '&nonce=' + NestedPages.jsData.nonce + '&syncmenu=' + NestedPages.jsData.syncmenu + '&post_type=' + NestedPages.jsData.posttype,
 			success: function(data){
 				if (data.status === 'error'){
 					plugin.toggleLoading(false);
@@ -1072,10 +1356,16 @@ NestedPages.NewPost = function()
 	// Add the new posts
 	plugin.addPosts = function()
 	{
+		// Before/After ID if applicable
+		var before = $(plugin.form).find('.page_before_id').val();
+		before = ( before !== '' ) ? before : false;
+		var after = $(plugin.form).find('.page_after_id').val();
+		after = ( after !== '' ) ? after : false;
+
 		var parent_li = $(plugin.form).parent('.new-child').parent('.page-row');
 		
 		// If parent li doesn't have a child ol, add one
-		if ( $(parent_li).children('ol').length === 0 ){
+		if ( $(parent_li).children('ol').length === 0 && !before && !after ){
 			$(parent_li).append('<ol class="nplist"></ol>');
 		}
 
@@ -1086,19 +1376,22 @@ NestedPages.NewPost = function()
 		}
 
 		for (i = 0; i < plugin.posts.length; i++){
-			plugin.appendRows(appendto, plugin.posts[i]);
+			plugin.appendRows(appendto, plugin.posts[i], before, after);
 		}
 
 		// Show the child page list and reset submenu toggles
-		$(appendto).show();
+		if ( !before && !after ){
+			$(appendto).show();
+		}
+
 		plugin.formatter.updateSubMenuToggle();
 		plugin.formatter.setNestedMargins();
 		plugin.cancelNewPage();
-		$(NestedPages.selectors.newPageModal).modal('hide');
+		$(document).trigger('close-modal-manual');
 	}
 
 	// Append new post rows to the nested view
-	plugin.appendRows = function(appendto, post)
+	plugin.appendRows = function(appendto, post, before, after)
 	{
 		var html = '<li id="menuItem_' + post.id + '" class="page-row';
 		if ( post.status === 'publish' ) html += ' published';
@@ -1113,7 +1406,10 @@ NestedPages.NewPost = function()
 		}
 
 		html += '<div class="row-inner">';
-		html += '<i class="np-icon-sub-menu"></i><i class="handle np-icon-menu"></i>';
+		// Submenu
+		html += '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" class="np-icon-sub-menu"><path fill="none" d="M0 0h24v24H0V0z"/><path d="M19 15l-6 6-1.42-1.42L15.17 16H4V4h2v10h9.17l-3.59-3.58L13 9l6 6z" class="arrow" /></svg>';
+		// Handle
+		html += '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" class="handle np-icon-menu"><path d="M0 0h24v24H0z" fill="none" /><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" class="bars" /></svg>';
 		html += '<a href="' + post.edit_link + '" class="page-link page-title">';
 		html += '<span class="title">' + post.title + '</span>';
 		
@@ -1131,7 +1427,7 @@ NestedPages.NewPost = function()
 		}
 		html += '</span>';
 
-		html += '<span class="edit-indicator"><i class="np-icon-pencil"></i>Edit</span>';
+		html += '<span class="edit-indicator">Edit</span>';
 		html += '</a>';
 
 		// Non-Hierarchical Data
@@ -1151,20 +1447,60 @@ NestedPages.NewPost = function()
 
 		// Action Buttons
 		html += '<div class="action-buttons">';
-		html += '<a href="#" class="np-btn open-redirect-modal" data-parentid="' + post.id + '"><i class="np-icon-link"></i></a>';
-		html += '<a href="#" class="np-btn add-new-child" data-id="' + post.id + '" data-parentname="' + post.title + '">' + nestedpages.add_child_short + '</a>';
+		html += '<div class="nestedpages-dropdown" data-dropdown><a href="#" class="np-btn has-icon toggle" data-dropdown-toggle><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></a><ul class="nestedpages-dropdown-content" data-dropdown-content>';
+		// Add Link
+		html += '<li><a href="#" class="open-redirect-modal" data-parentid="' + post.id + '"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>' + nestedpages.add_link + '</a></li>';
+		// Add Child
+		html += '<li><a href="#" class="add-new-child" data-id="' + post.id + '" data-parentname="' + post.title + '"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zM3 8v8l4-4-4-4zm8 9h10v-2H11v2zM3 3v2h18V3H3zm8 6h10V7H11v2zm0 4h10v-2H11v2z"/><path d="M0 0h24v24H0z" fill="none"/></svg>' + nestedpages.add_child_short + '</a></li>';
+		html += '</ul></div>';
 		
 		// Quick Edit (data attrs)
 		html += '<a href="#" class="np-btn np-quick-edit" data-id="' + post.id + '" data-template="' + post.page_template + '" data-title="' + post.title + '" data-slug="' + post.slug + '" data-commentstatus="closed" data-status="' + post.status.toLowerCase() + '" data-np-status="show"	data-navstatus="show" data-author="' + post.author + '" data-template="' + post.template + '" data-month="' + post.month + '" data-day="' + post.day + '" data-year="' + post.year + '" data-hour="' + post.hour + '" data-minute="' + post.minute + '" data-datepicker="' + post.datepicker + '" data-time="' + post.time + '" data-formattedtime="' + post.formattedtime + '" data-ampm="' + post.ampm + '">' + nestedpages.quick_edit + '</a>';
 
 		html += '<a href="' + post.view_link + '" class="np-btn" target="_blank">' + nestedpages.view + '</a>';
-		html += '<a href="' + post.delete_link + '" class="np-btn np-btn-trash"><i class="np-icon-remove"></i></a>';
+
+		// Trash
+		html += '<a href="' + post.delete_link + '" class="np-btn np-btn-trash"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" class="np-icon-remove"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" class="icon"/><path d="M0 0h24v24H0z" fill="none"/></svg></a>';
 		html += '</div><!-- .action-buttons -->';
 
 		html += '</div><!-- .row-inner --></div><!-- .row -->';
 		html += '</li>';
 
+		if ( before ){
+			var row = plugin.findRowById(before);
+			$(html).insertBefore(row);
+			return;
+		}
+		if ( after ){
+			var row = plugin.findRowById(after);
+			$(html).insertAfter(row);
+			return;
+		}
+
 		$(appendto).append(html);
+	}
+
+	// Find the row for inserting before/after
+	plugin.findRowById = function(id)
+	{
+		var row = $(NestedPages.selectors.rows + '#menuItem_' + id);
+		return row;
+	}
+
+	// Toggle the "Add & Edit" & "Add" buttons depending on row count
+	plugin.toggleAddEditButton = function(form)
+	{
+		var titleCount = $(form).find('.np_title').length;
+		if ( titleCount < 1 ){
+			$(NestedPages.selectors.newPageSubmitButton).hide();
+			return;
+		}
+		$(NestedPages.selectors.newPageSubmitButton).show();
+		if ( titleCount > 1 ){
+			$(NestedPages.selectors.newPageSubmitButton + '.add-edit').hide()
+			return;
+		}
+		$(NestedPages.selectors.newPageSubmitButton + '.add-edit').show()
 	}
 
 	// Toggle the form loading state
@@ -1205,13 +1541,6 @@ NestedPages.QuickEditPost = function()
 	plugin.newData = ''; // New Data, after save
 	plugin.row = ''; // The row being edited
 
-
-	plugin.init = function()
-	{
-		plugin.bindEvents();
-	}
-
-
 	plugin.bindEvents = function()
 	{
 		$(document).on('click', NestedPages.selectors.quickEditOpen, function(e){
@@ -1222,14 +1551,6 @@ NestedPages.QuickEditPost = function()
 		$(document).on('click', NestedPages.selectors.quickEditCancel, function(e){
 			e.preventDefault();
 			plugin.formatter.removeQuickEdit();
-		});
-		$(document).on('click', NestedPages.selectors.quickEditToggleTaxonomies, function(e){
-			e.preventDefault();
-			$(this).parents('form').find('.np-taxonomies').toggle();
-		});
-		$(document).on('click', NestedPages.selectors.quickEditToggleMenuOptions, function(e){
-			e.preventDefault();
-			$(this).parents('form').find('.np-menuoptions').toggle();
 		});
 		$(document).on('change', '.keep_private', function(){
 			if ( this.checked ){
@@ -1290,6 +1611,13 @@ NestedPages.QuickEditPost = function()
 			sticky: $(plugin.button).attr('data-sticky')
 		};
 
+		// Add Custom Fields if Available
+		var attrs = $(plugin.button)[0].attributes;
+		$.each(attrs, function(i, attr){
+			if ( !attr.name.includes('data-npcustom') ) return;
+			plugin.initialData[attr.name] = attr.value;
+		});
+
 		// Add Array of Taxonomies to the data object using classes applied to the list element
 		plugin.initialData.h_taxonomies = [];
 		plugin.initialData.f_taxonomies = [];
@@ -1335,7 +1663,7 @@ NestedPages.QuickEditPost = function()
 		$(plugin.form).find('.np_title_attribute').val(plugin.initialData.navtitleattr);
 		$(plugin.form).find('.np_nav_css_classes').val(plugin.initialData.navcss);
 		$(plugin.form).find('.post_password').val(plugin.initialData.password);
-		$(plugin.form).find('.np_datepicker').val(plugin.initialData.datepicker);
+		$(plugin.form).find('.np_publish_date').val(plugin.initialData.datepicker);
 		if ( plugin.initialData.cs === 'open' ) $(plugin.form).find('.np_cs').attr('checked', 'checked');
 
 		if ( plugin.initialData.template !== '' ){
@@ -1390,6 +1718,18 @@ NestedPages.QuickEditPost = function()
 			$(plugin.form).find('input[name="mn"]').val(plugin.initialData.minute);
 		}
 
+		// Custom Fields
+		for ( var key in plugin.initialData ){
+			if ( !key.includes('npcustom') ) continue;
+			if ( plugin.initialData.hasOwnProperty(key) ){
+				var inputName = key.replace('data-npcustom-', '');
+				inputName = inputName.toLowerCase();
+				$(plugin.form).find('[data-np-custom-field="' + inputName + '"]').val(plugin.initialData[key]);
+			}
+		}
+
+		plugin.populateFlatTaxonomies();
+
 		// Populate Hierarchical Taxonomy Checkboxes
 		if ( plugin.initialData.hasOwnProperty('h_taxonomies') ){
 			var taxonomies = plugin.initialData.h_taxonomies;
@@ -1399,10 +1739,15 @@ NestedPages.QuickEditPost = function()
 			}
 		}
 
-		$(plugin.form).find('.np_datepicker').datepicker({
-			beforeShow: function(input, inst) {
-				$('#ui-datepicker-div').addClass('nestedpages-datepicker');
-			}
+		var datepickers = $(plugin.form).find('.np_datepicker');
+		$.each(datepickers, function(){
+			var $this = $(this);
+			$this.datepicker({
+				dateFormat: $this.attr('data-datepicker-format'),
+				beforeShow: function(input, inst) {
+					$('#ui-datepicker-div').addClass('nestedpages-datepicker');
+				}
+			});
 		});
 
 		plugin.formatter.showQuickEdit();
@@ -1532,17 +1877,21 @@ NestedPages.QuickEditPost = function()
 		
 		var status = $(plugin.row).find('.status');
 		if ( (plugin.newData._status !== 'publish') && (plugin.newData._status !== 'future') ){
-			$(status).text('(' + plugin.newData._status + ')');
-		} else if (plugin.newData.keep_private === 'private') {
-			$(status).text('(' + plugin.newData.keep_private + ')');
+			var newStatus = nestedpages.post_statuses[plugin.newData._status].label;
+			$(status).text('(' + newStatus + ')');
 		} else {
 			$(status).text('');
+		}
+		if ( plugin.newData.keep_private === 'private' ){
+			$(status).text(nestedpages.private);
 		}
 
 		// Password Lock Icon
 		if ( plugin.newData.post_password !== "" && typeof plugin.newData.post_password !== 'undefined'){
 			var statustext = $(status).text();
-			statustext += ' <i class="np-icon-lock"></i>';
+			statustext += ' <span class="locked">';
+			statustext += '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>'
+			statustext += '</span>';
 			$(status).html(statustext);
 		}
 
@@ -1558,10 +1907,10 @@ NestedPages.QuickEditPost = function()
 		var li = $(plugin.row).parent('li');
 		if ( (plugin.newData.np_status == 'hide') ){
 			$(li).addClass('np-hide');
-			$(plugin.row).find('.status').after('<i class="np-icon-eye-blocked"></i>');
+			$(plugin.row).find('.status').after('<svg class="row-status-icon status-np-hidden" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0z" fill="none"/><path class="icon" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>');
 		} else {
 			$(li).removeClass('np-hide');
-			$(plugin.row).find('.np-icon-eye-blocked').remove();
+			$(plugin.row).find('.status-np-hidden').remove();
 		}
 
 		// Sticky
@@ -1611,6 +1960,15 @@ NestedPages.QuickEditPost = function()
 		$(button).attr('data-time', plugin.newData.np_time);
 		$(button).attr('data-formattedtime', plugin.newData.np_time);
 		$(button).attr('data-ampm', plugin.newData.np_ampm);
+
+		// Custom Fields
+		for ( var key in plugin.newData ){
+			if ( !key.includes('np_custom') ) continue;
+			if ( plugin.newData.hasOwnProperty(key) ){
+				var attrName = key.replace('np_custom_', 'data-npcustom-');
+				$(button).attr(attrName, plugin.newData[key]);
+			}
+		}
 
 		plugin.removeTaxonomyClasses();
 		plugin.addCategoryClasses();
@@ -1703,10 +2061,7 @@ NestedPages.QuickEditPost = function()
 		$(NestedPages.selectors.quickEditLoadingIndicator).hide();
 	}
 
-	
-
-	return plugin.init();
-
+	return plugin.bindEvents();
 
 }
 var NestedPages = NestedPages || {};
@@ -1726,13 +2081,6 @@ NestedPages.QuickEditLink = function()
 	plugin.postData = ''; // Data for Post being edited (before update)
 	plugin.newPostData = ''; // Data after update
 	plugin.form = ''; // The newly created Quick Edit Form
-
-
-	plugin.init = function()
-	{
-		plugin.bindEvents();
-	}
-
 
 	plugin.bindEvents = function()
 	{
@@ -1883,9 +2231,8 @@ NestedPages.QuickEditLink = function()
 	// Update the row after successfully saving quick edit data
 	plugin.updateRow = function()
 	{
-		console.log(plugin.newPostData);
 		var row = $(plugin.form).siblings('.row');
-		$(row).find('.title').html(plugin.newPostData.post_title + ' <i class="np-icon-link"></i>');
+		$(row).find('.title').html(plugin.newPostData.post_title + ' <svg class="link-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path class="icon" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>');
 		
 		var status = $(row).find('.status');
 		if ( (plugin.newPostData._status !== 'publish') && (plugin.newPostData._status !== 'future') ){
@@ -1906,10 +2253,10 @@ NestedPages.QuickEditLink = function()
 		var li = $(row).parent('li');
 		if ( (plugin.newPostData.np_status == 'hide') ){
 			$(li).addClass('np-hide');
-			$(row).find('.status').after('<i class="np-icon-eye-blocked"></i>');
+			$(row).find('.status').after('<svg class="row-status-icon status-np-hidden" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0z" fill="none"/><path class="icon" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>');
 		} else {
 			$(li).removeClass('np-hide');
-			$(row).find('.np-icon-eye-blocked').remove();
+			$(row).find('.status-np-hidden').remove();
 		}
 
 		var button = $(row).find(NestedPages.selectors.quickEditButtonLink);
@@ -1943,8 +2290,7 @@ NestedPages.QuickEditLink = function()
 		$(NestedPages.selectors.quickEditLoadingIndicator).hide();
 	}
 
-
-	return plugin.init();
+	return plugin.bindEvents();
 
 }
 var NestedPages = NestedPages || {};
@@ -1965,12 +2311,6 @@ NestedPages.Clone = function()
 
 	plugin.formatter = new NestedPages.Formatter;
 
-	plugin.init = function()
-	{
-		plugin.bindEvents();
-	}
-
-
 	plugin.bindEvents = function()
 	{
 		$(document).on('click', NestedPages.selectors.cloneButton, function(e){
@@ -1989,10 +2329,9 @@ NestedPages.Clone = function()
 	// Open the modal with clone options
 	plugin.openModal = function()
 	{
-		$(NestedPages.selectors.cloneModal).find('[data-clone-parent]').text(plugin.parent_title);
-		$(NestedPages.selectors.cloneModal).modal('show');
+		$('#' + NestedPages.selectors.cloneModal).find('[data-clone-parent]').text(plugin.parent_title);
+		$(document).trigger('open-modal-manual', NestedPages.selectors.cloneModal);
 	}
-
 
 	// Clone the post
 	plugin.clone = function()
@@ -2012,68 +2351,89 @@ NestedPages.Clone = function()
 			},
 			success : function(data){
 				plugin.toggleLoading(false);
-				$(NestedPages.selectors.cloneModal).modal('hide');
+				$(document).trigger('close-modal-manual');
 				location.reload();
 			}
 		});
 	}
 
-
 	// Toggle Loading
 	plugin.toggleLoading = function(loading)
 	{
 		if ( loading ){
-			$(NestedPages.selectors.cloneModal).find('[data-clone-loading]').show();
+			$('#' + NestedPages.selectors.cloneModal).find('[data-clone-loading]').show();
 			$(NestedPages.selectors.confirmClone).attr('disabled', 'disabled');
 			return;
 		}
-		$(NestedPages.selectors.cloneModal).find('[data-clone-loading]').hide();
+		$('#' + NestedPages.selectors.cloneModal).find('[data-clone-loading]').hide();
 		$(NestedPages.selectors.confirmClone).attr('disabled', false);
 	}
 
-	return plugin.init();
+	return plugin.bindEvents();
 }
-var NestedPages = NestedPages || {};
-
 /**
-* Tab functionality
-* @package Nested Pages
-* @author Kyle Phillips - https://github.com/kylephillips/wp-nested-pages
+* Tabs
+* 
+* @author Kyle Phillips
+* 
+* To use, include links with a data-tab-toggle attribute which matches the tab pane's data-tab-pane attribute
+* The tabs and panes should all the same data-tab-group attribute value
+* Add a CSS selector of .tab-pane to panes to hide them
 */
+var NestedPages = NestedPages || {};
 NestedPages.Tabs = function()
 {
-	var plugin = this;
+	var self = this;
 	var $ = jQuery;
 
-	plugin.activeContent = '';
-	plugin.activeButton = '';
-
-	plugin.init = function()
-	{
-		plugin.bindEvents();
+	self.selectors = {
+		tabToggle : 'data-np-tab-toggle',
+		tabPane : 'data-np-tab-pane',
+		tabGroup : 'data-np-tab-group'
 	}
 
-
-	plugin.bindEvents = function()
+	self.bindEvents = function()
 	{
-		$(document).on('click', NestedPages.selectors.tabButton, function(e){
+		$(document).on('click', '[' + self.selectors.tabToggle + ']', function(e){
 			e.preventDefault();
-			plugin.activeButton = $(this);
-			plugin.toggleTabs();
+			self.toggleTabs($(this));
 		});
 	}
 
-
-	plugin.toggleTabs = function()
+	/**
+	* Toggle the Tabs
+	*/
+	self.toggleTabs = function(tab)
 	{
-		plugin.activeContent = $(plugin.activeButton).attr('href');
-		$(NestedPages.selectors.tabContent).hide();
-		$(plugin.activeContent).show();
-		$(plugin.activeButton).parents(NestedPages.selectors.tabButtonParent).find(NestedPages.selectors.tabButton).removeClass('active');
-		$(plugin.activeButton).addClass('active');
+		var tabGroup = $(tab).attr(self.selectors.tabGroup);
+		var tabPanes = $('*[' + self.selectors.tabGroup + '=' + tabGroup + '][' + self.selectors.tabPane + ']');
+		var activeTab = $(tab).attr(self.selectors.tabToggle);
+		var buttons = $('*[' + self.selectors.tabGroup + '=' + tabGroup + '][' + self.selectors.tabToggle + ']');
+		var listItems = [];
+
+		for ( var i = 0; i < buttons.length; i++ ){
+			listItems[i] = $(buttons[i]).parent('li')[0];
+		}
+
+		$(tabPanes).hide();
+		$(buttons).removeClass('active');
+		$(listItems).removeClass('active');
+
+		$.each(tabPanes, function(){
+			if ( $(this).attr(self.selectors.tabPane) == activeTab ) $(this).show();
+		});
+
+		$.each(buttons, function(){
+			if ( $(this).attr(self.selectors.tabToggle) == activeTab ) {
+				$(this).addClass('active');
+				$(this).parent('li').addClass('active');
+			}
+		});
+
+		$(document).trigger('tabs-changed', [activeTab, tabGroup, tab]);
 	}
 
-	return plugin.init();
+	return self.bindEvents();
 }
 /**
 * Primary Nested Pages Initialization
@@ -2108,6 +2468,7 @@ NestedPages.selectors = {
 	syncCheckbox : '.np-sync-menu', // Sync menu checkbox
 	syncForm: '.np-sync-menu-cont', // The form/container for the sync menu element
 	ajaxError : '[data-nestedpages-error]', // AJAX error notification
+	trashWithChildrenButton : '[data-nestedpages-trash-children]',
 
 	// Responsive Toggle
 	toggleEditButtons : '.np-toggle-edit', // Button that toggles responsive buttons
@@ -2131,8 +2492,6 @@ NestedPages.selectors = {
 	quickEditLoadingIndicator : '.np-qe-loading', // Loading indicator in Quick Edit
 	quickEditErrorDiv : '.np-quickedit-error', // Error Div in Quick Edit
 	quickEditCancel : '.np-cancel-quickedit', // Cancel button in quick edit
-	quickEditToggleTaxonomies : '.np-toggle-taxonomies', // Toggle Taxonomies in Quick Edit
-	quickEditToggleMenuOptions : '.np-toggle-menuoptions', // Toggle Menu Options in Quick Edit
 
 	// Quick Edit - Links
 	quickEditButtonLink : '.np-quick-edit-redirect', // Button to open link quick edit
@@ -2146,7 +2505,7 @@ NestedPages.selectors = {
 
 	// Link Items
 	openLinkModal : '.open-redirect-modal', // Opens new link modal
-	linkModal : '#np-link-modal', // The add a link modal
+	linkModal : 'np-link-modal', // The add a link modal
 	saveLink : '.np-save-link', // Save Link Button
 	linkLoadingIndicator : '.np-link-loading', // Loading Indicator in Link Modal
 	linkErrorDiv : '.np-new-link-error', // Error Div in Link Modal
@@ -2155,7 +2514,7 @@ NestedPages.selectors = {
 	// Link Deletion
 	linkDeleteButton : '[data-np-confirm-delete]',
 	linkDeleteConfirmationButton : '[data-delete-confirmation]',
-	linkDeleteConfirmationModal : '#np-delete-confirmation-modal',
+	linkDeleteConfirmationModal : 'np-delete-confirmation-modal',
 	linkDeleteConfirmationModalText : '[data-np-link-delete-text]',
 
 	// New Page Items
@@ -2169,11 +2528,13 @@ NestedPages.selectors = {
 	addChildButton : '.add-new-child', // Button to add child page(s)
 	newChildError : '.np-newchild-error', // Error div in new child quick edit
 	cancelNewChildButton : '.np-cancel-newchild', // Cancel button in new child quick edit
+	newBeforeButton : 'data-insert-before', // Add new post(s) before a post
+	newAfterButton : 'data-insert-after', // Add new post(s) after a post
 
 	// Clone
 	cloneButton : '.clone-post', // Button to clone a post
 	confirmClone : '[data-confirm-clone]', // Button in modal to confirm clone
-	cloneModal : '#np-clone-modal', // Modal with clone options
+	cloneModal : 'np-clone-modal', // Modal with clone options
 	cloneQuantity : '[data-clone-quantity]', // Quantity to Clone
 	cloneStatus : '[data-clone-status]', // Clone Status
 	cloneAuthor : '[data-clone-author]', // Clone Author
@@ -2196,8 +2557,6 @@ NestedPages.selectors = {
 
 // CSS Classes
 NestedPages.cssClasses = {
-	iconToggleDown : 'np-icon-arrow-down',
-	iconToggleRight : 'np-icon-arrow-right',
 	noborder : 'no-border'
 }
 
@@ -2228,6 +2587,7 @@ NestedPages.formActions = {
 	syncNesting : 'npsort',
 	syncMenu : 'npsyncMenu',
 	newPage : 'npnewChild',
+	newBeforeAfter : 'npnewBeforeAfter',
 	quickEditLink : 'npquickEditLink',
 	getTaxonomies : 'npgetTaxonomies',
 	quickEditPost : 'npquickEdit',
@@ -2237,7 +2597,10 @@ NestedPages.formActions = {
 	manualMenuSync : 'npmanualMenuSync',
 	postSearch: 'nppostSearch',
 	wpmlTranslations : 'npWpmlTranslations',
-	resetSettings : 'npresetSettings'
+	resetSettings : 'npresetSettings',
+	resetUserPrefs : 'npresetUserPreferences',
+	resetAdminMenuSettings : 'npresetAdminMenuSettings',
+	trashWithChildren : 'nptrashWithChildren'
 }
 
 
@@ -2250,7 +2613,8 @@ NestedPages.Factory = function()
 	var $ = jQuery;
 
 	plugin.formatter = new NestedPages.Formatter;
-	plugin.responsive = new NestedPages.Responsive;
+	plugin.dropdowns = new NestedPages.Dropdowns;
+	plugin.modals = new NestedPages.Modals;
 	plugin.checkAll = new NestedPages.CheckAll;
 	plugin.bulkActions = new NestedPages.BulkActions;
 	plugin.menuToggle = new NestedPages.MenuToggle;
@@ -2267,7 +2631,9 @@ NestedPages.Factory = function()
 	plugin.confirmDelete = new NestedPages.ConfirmDelete;
 	plugin.manualSync = new NestedPages.ManualSync;
 	plugin.postSearch = new NestedPages.PostSearch;
+	plugin.postMove = new NestedPages.MovePost;
 	plugin.wpml = new NestedPages.Wpml;
+	plugin.trashWithChildren = new NestedPages.TrashWithChildren;
 
 	plugin.init = function()
 	{
@@ -2385,15 +2751,11 @@ NestedPages.MenuLinks = function()
 		cssClasses : '[data-np-menu-css-classes]',
 		npStatus : '[data-np-menu-np-status]',
 		linkTarget : '[data-np-menu-link-target]',
-		menuTitle : '[data-np-menu-title]'
+		menuTitle : '[data-np-menu-title]',
+		parentPostType : '[data-np-menu-parent-post-type]'
 	}
 
 	plugin.search = new NestedPages.MenuSearch;
-
-	plugin.init = function()
-	{
-		plugin.bindEvents();
-	}
 
 	plugin.bindEvents = function()
 	{
@@ -2420,7 +2782,7 @@ NestedPages.MenuLinks = function()
 			plugin.submitForm();
 		});
 		$(document).on('keydown', function(e){
-			if ( e.keyCode === 27 ) $('#np-link-modal').modal('hide');
+			if ( e.keyCode === 27 ) $(document).trigger('close-modal-manual');
 		});
 	}
 
@@ -2433,7 +2795,7 @@ NestedPages.MenuLinks = function()
 		plugin.clearForm();
 		$(plugin.selectors.accordion).find('ul').hide();
 		$(plugin.selectors.typeSelect).removeClass('active');
-		$(NestedPages.selectors.linkModal).modal('show');
+		$(document).trigger('open-modal-manual', NestedPages.selectors.linkModal);
 	}
 
 	// Accordion Menu
@@ -2496,7 +2858,7 @@ NestedPages.MenuLinks = function()
 		$(plugin.selectors.saveButton).hide();
 		$(plugin.selectors.formDetails).hide();
 		$(plugin.selectors.formPlaceholder).show();
-		$(plugin.selectors.form).find('input').not('.parent_id').val('');
+		$(plugin.selectors.form).find('input').not('.parent_id').not('.parent-post-type').val('');
 		$(plugin.selectors.form).find(plugin.fields.linkTarget).val('_blank');
 		$(plugin.selectors.form).find('input[type="checkbox"]').attr('checked', false);
 		$(plugin.selectors.typeSelect).removeClass('active');
@@ -2548,10 +2910,13 @@ NestedPages.MenuLinks = function()
 		var html = '<li id="menuItem_' + plugin.post.id + '" class="page-row published';
 		html += '">'
 
-		html += '<div class="row"><div class="child-toggle"><div class="child-toggle-spacer"></div></div><div class="row-inner"><i class="np-icon-sub-menu"></i><i class="handle np-icon-menu"></i><a href="' + plugin.post.np_link_content + '" class="page-link page-title" target="_blank"><span class="title">' + plugin.post.menuTitle + ' <i class="np-icon-link"></i></span>';
+		html += '<div class="row"><div class="child-toggle"><div class="child-toggle-spacer"></div></div><div class="row-inner">';
+		html += '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" class="np-icon-sub-menu"><path fill="none" d="M0 0h24v24H0V0z"/><path d="M19 15l-6 6-1.42-1.42L15.17 16H4V4h2v10h9.17l-3.59-3.58L13 9l6 6z" class="arrow" /></svg>';
+		html += '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" class="handle np-icon-menu"><path d="M0 0h24v24H0z" fill="none" /><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" class="bars" /></svg>';
+		html += '<a href="' + plugin.post.np_link_content + '" class="page-link page-title" target="_blank"><span class="title">' + plugin.post.menuTitle + ' <svg class="link-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path class="icon" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></span>';
 
 		// Quick Edit Button
-		html += '</a><a href="#" class="np-toggle-edit"><i class="np-icon-pencil"></i></a><div class="action-buttons"><a href="#" class="np-btn np-quick-edit-redirect" ';
+		html += '</a><div class="action-buttons"><a href="#" class="np-btn np-quick-edit-redirect" ';
 		html +=	'data-id="' + plugin.post.id + '"'; 
 		html += 'data-parentid="' + plugin.post.parent_id + '"';
 		html += 'data-title="' + plugin.post.menuTitle + '" ';
@@ -2581,7 +2946,7 @@ NestedPages.MenuLinks = function()
 			plugin.appendChildRow(html);
 		}
 
-		$(NestedPages.selectors.linkModal).modal('hide');
+		$(document).trigger('close-modal-manual');
 
 		plugin.row = $('#menuItem_' + plugin.post.id).find('.row');
 		plugin.formatter.flashRow(plugin.row);
@@ -2613,7 +2978,7 @@ NestedPages.MenuLinks = function()
 		$(plugin.selectors.saveButton).attr('disabled', false);
 	}
 
-	return plugin.init();
+	return plugin.bindEvents();
 }
 var NestedPages = NestedPages || {};
 
@@ -2773,18 +3138,7 @@ var NestedPagesTrash = function()
 	plugin.nonce = nestedpages.np_nonce;
 	plugin.formAction = 'npEmptyTrash';
 
-
-	// Initialization
-	plugin.init = function(){
-		plugin.bindEvents();
-	}
-
-	// Bind Events
 	plugin.bindEvents = function(){
-		$(document).on('click', plugin.trashButton, function(e){
-			e.preventDefault();
-			$(plugin.warningModal).modal('show');
-		});
 		$(document).on('click', plugin.confirmButton, function(e){
 			e.preventDefault();
 			plugin.confirmEmpty();
@@ -2794,7 +3148,7 @@ var NestedPagesTrash = function()
 	// Confirm Trash Empty
 	plugin.confirmEmpty = function(){
 		plugin.loading(true);
-		$(plugin.warningModal).hide();
+		$(document).trigger('close-modal-manual');
 		$(plugin.errorAlert).hide();
 		plugin.emptyTrash();
 	}
@@ -2831,9 +3185,8 @@ var NestedPagesTrash = function()
 		$(plugin.loadingIndicator).hide();
 	}
 
-	return plugin.init();
+	return plugin.bindEvents();
 }
-
 var NestedPages = NestedPages || {};
 
 /**
@@ -2874,7 +3227,7 @@ NestedPages.ConfirmDelete = function()
 		plugin.deleteLink = $(button).attr('href');
 		$(NestedPages.selectors.linkDeleteConfirmationModalText).text(nestedpages.link_delete_confirmation_singular);
 		$(NestedPages.selectors.linkDeleteConfirmationButton).text(nestedpages.delete).removeClass('bulk');
-		$(NestedPages.selectors.linkDeleteConfirmationModal).modal('show');
+		$(document).trigger('open-modal-manual', NestedPages.selectors.linkDeleteConfirmationModal);
 	}
 
 	// Confirm Multiple link deletion
@@ -2886,7 +3239,7 @@ NestedPages.ConfirmDelete = function()
 		event.preventDefault();
 		$(NestedPages.selectors.linkDeleteConfirmationModalText).text(nestedpages.link_delete_confirmation);
 		$(NestedPages.selectors.linkDeleteConfirmationButton).text(nestedpages.trash_delete_links).addClass('bulk');
-		$(NestedPages.selectors.linkDeleteConfirmationModal).modal('show');
+		$(document).trigger('open-modal-manual', [NestedPages.selectors.linkDeleteConfirmationModal]);
 	}
 
 	// Submit the form to delete multiple
@@ -3118,6 +3471,144 @@ NestedPages.PostSearch = function()
 var NestedPages = NestedPages || {};
 
 /**
+* Move a Post Up or Down in the list
+* @package Nested Pages
+* @author Kyle Phillips - https://github.com/kylephillips/wp-nested-pages
+*/
+NestedPages.MovePost = function()
+{
+	var plugin = this;
+	var $ = jQuery;
+
+	plugin.formatter = new NestedPages.Formatter;
+	plugin.nesting = new NestedPages.Nesting;
+	plugin.activeRow;
+
+	plugin.selectors = {
+		moveToTop : 'data-push-to-top',
+		moveToBottom : 'data-push-to-bottom'
+	}
+
+	plugin.bindEvents = function()
+	{
+		$(document).ready(function(){
+			plugin.disableTopOnFirst();
+			plugin.disableBottomOnLast();
+		});
+		$(document).on('click', '[' + plugin.selectors.moveToTop + ']', function(e){
+			e.preventDefault();
+			if ( $(this).hasClass('disabled') ) return;
+			plugin.activeRow = $(this).closest(NestedPages.selectors.rows);
+			plugin.moveToTop();
+		});
+		$(document).on('click', '[' + plugin.selectors.moveToBottom + ']', function(e){
+			e.preventDefault();
+			if ( $(this).hasClass('disabled') ) return;
+			plugin.activeRow = $(this).closest(NestedPages.selectors.rows);
+			plugin.moveToBottom();
+		});
+	}
+
+	/**
+	* Move a post to the top of its list
+	*/
+	plugin.moveToTop = function()
+	{
+		var parent = $(plugin.activeRow).parent(NestedPages.selectors.lists);
+		var first = $(parent).find(NestedPages.selectors.rows).first();
+		$(plugin.activeRow).insertBefore(first);
+		plugin.formatter.setBorders();
+		$(document).click(); // Close Dropdowns
+		plugin.nesting.syncNesting();
+		plugin.disableTopOnFirst();
+		plugin.disableBottomOnLast();
+	}
+
+	/**
+	* Move a post to the bottom of its list
+	*/
+	plugin.moveToBottom = function()
+	{
+		var parent = $(plugin.activeRow).parent(NestedPages.selectors.lists);
+		var last = $(parent).children(NestedPages.selectors.rows).last();
+		$(plugin.activeRow).insertAfter(last);
+		plugin.formatter.setBorders();
+		$(document).click(); // Close Dropdowns
+		plugin.nesting.syncNesting();
+		plugin.disableTopOnFirst();
+		plugin.disableBottomOnLast();
+	}
+
+	plugin.disableTopOnFirst = function()
+	{
+		var lists = $(NestedPages.selectors.lists);
+		$.each(lists, function(){
+			$(this).find('[' + plugin.selectors.moveToTop + ']').removeClass('disabled');
+			var first = $(this).find(NestedPages.selectors.rows).first();
+			$(first).find('[' + plugin.selectors.moveToTop + ']').addClass('disabled');
+		});
+	}
+
+	plugin.disableBottomOnLast = function()
+	{
+		var lists = $(NestedPages.selectors.lists);
+		$.each(lists, function(){
+			$(this).find('[' + plugin.selectors.moveToBottom + ']').removeClass('disabled');
+			var last = $(this).find(NestedPages.selectors.rows).last();
+			$(last).find('[' + plugin.selectors.moveToBottom + ']').addClass('disabled');
+		});
+	}
+
+	return plugin.bindEvents();
+}
+var NestedPages = NestedPages || {};
+
+/**
+* Trash post with all children
+* @package Nested Pages
+* @author Kyle Phillips - https://github.com/kylephillips/wp-nested-pages
+*/
+NestedPages.TrashWithChildren = function()
+{
+	var plugin = this;
+	var $ = jQuery;
+
+	plugin.post_id = ''; // The parent/source post ID
+
+	plugin.bindEvents = function()
+	{
+		$(document).on('click', NestedPages.selectors.trashWithChildrenButton, function(e){
+			e.preventDefault();
+			plugin.post_id = $(this).attr('data-post-id');
+			plugin.trash();
+		});
+	}
+
+	// Trash the posts
+	plugin.trash = function()
+	{
+		$.ajax({
+			url : NestedPages.jsData.ajaxurl,
+			type : 'post',
+			data : {
+				action : NestedPages.formActions.trashWithChildren,
+				nonce : NestedPages.jsData.nonce,
+				post_id : plugin.post_id,
+				screen : nestedpages.current_page
+			},
+			success : function(data){
+				window.location.replace(data.redirect);
+			}, error : function(data){
+				console.log(data);
+			}
+		});
+	}
+
+	return plugin.bindEvents();
+}
+var NestedPages = NestedPages || {};
+
+/**
 * WPML functionality
 * @package Nested Pages
 * @author Kyle Phillips - https://github.com/kylephillips/wp-nested-pages
@@ -3154,8 +3645,8 @@ NestedPages.Wpml = function()
 	*/
 	plugin.createTranslationsModal = function(button)
 	{
-		plugin.parent_li = $(button).closest(NestedPages.selectors.row).parent('li');
-		plugin.button = $(button).siblings(NestedPages.selectors.quickEditOpen);
+		plugin.parent_li = $(button).parents('.action-buttons').closest(NestedPages.selectors.row).parent('li');
+		plugin.button = $(plugin.parent_li).find(NestedPages.selectors.quickEditOpen);
 		plugin.postData = {
 			id : $(plugin.button).attr('data-id'),
 			title : $(plugin.button).attr('data-title'),
@@ -3190,6 +3681,8 @@ NestedPages.Wpml = function()
 				nonce : NestedPages.jsData.nonce
 			},
 			success: function(data){
+				console.log(data);
+				console.log(plugin.postData.id);
 				if ( data.status === 'success' ){
 					plugin.populateModal(data.translations);
 				} else {

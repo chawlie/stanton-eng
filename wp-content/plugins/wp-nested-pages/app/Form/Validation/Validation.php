@@ -26,7 +26,7 @@ class Validation
 		foreach ($posts as $post)
 		{
 			if ( !is_numeric($post['id']) ){
-				return wp_send_json(array('status'=>'error', 'message'=>'Incorrect Form Field'));
+				return wp_send_json(['status'=>'error', 'message'=>'Incorrect Form Field']);
 			}
 		}
 	}
@@ -39,7 +39,7 @@ class Validation
 		foreach ( $items as $item )
 		{
 			if ( !is_numeric($item) ){
-				return wp_send_json(array('status'=>'error', 'message'=>'Incorrect Form Field'));
+				return wp_send_json(['status'=>'error', 'message'=>'Incorrect Form Field']);
 			}
 		}
 	}
@@ -131,10 +131,10 @@ class Validation
 	*/
 	private function sendDateError()
 	{
-		wp_send_json(array(
+		wp_send_json([
 			'status' => 'error', 
 			'message' => __('Please provide a valid date.', 'wp-nested-pages') 
-		));
+		]);
 		die();
 	}
 
@@ -158,7 +158,7 @@ class Validation
 	{
 		if ( $var == "" ){
 			$message = __('Please provide a ', 'wp-nested-pages') . $title;
-			return wp_send_json(array('status' => 'error', 'message' => $message));
+			return wp_send_json(['status' => 'error', 'message' => $message]);
 			die();
 		}
 	}
@@ -168,17 +168,31 @@ class Validation
 	*/
 	public function validateNewPages($data)
 	{
-		// Check for Parent ID
-		if ( (!isset($data['parent_id'])) || (!is_numeric($data['parent_id'])) ){
-			$message = __('A valid parent page was not provided.', 'wp-nested-pages');
-			return wp_send_json(array('status' => 'error', 'message' => $message));
+		// Check for Parent ID or Before/After IDs
+		if ( !isset($data['before_id']) && !isset($data['after_id']) ){
+			if ( (!isset($data['parent_id'])) || (!is_numeric($data['parent_id'])) ){
+				$message = __('A valid parent page was not provided.', 'wp-nested-pages');
+				return wp_send_json(['status' => 'error', 'message' => $message]);
+				die();
+			}
+		}
+
+		if ( isset($data['before_id']) && $data['before_id'] !== '' && !is_numeric($data['before_id']) ){
+			$message = __('A valid parent page was not provided to insert before.', 'wp-nested-pages');
+			return wp_send_json(['status' => 'error', 'message' => $message, 'data' => $data]);
+			die();
+		}
+
+		if ( isset($data['after_id']) && $data['after_id'] !== '' && !is_numeric($data['after_id']) ){
+			$message = __('A valid parent page was not provided to insert after.', 'wp-nested-pages');
+			return wp_send_json(['status' => 'error', 'message' => $message, 'data' => $data]);
 			die();
 		}
 
 		// Make sure there's at least one page
 		if ( !isset($data['post_title']) ){
 			$message = __('Please provide at least one page title.', 'wp-nested-pages');
-			return wp_send_json(array('status' => 'error', 'message' => $message));
+			return wp_send_json(['status' => 'error', 'message' => $message]);
 			die();
 		}
 
@@ -186,11 +200,35 @@ class Validation
 		foreach ( $data['post_title'] as $title ){
 			if ( $title == "" ){
 				$message = __('Page titles cannot be blank.', 'wp-nested-pages');
-				return wp_send_json(array('status' => 'error', 'message' => $message));
+				return wp_send_json(['status' => 'error', 'message' => $message, 'data' => $data]);
 				die();
 			}
 		}
 
+		return true;
+	}
+
+	/**
+	* Validate Custom Fields
+	*/
+	public function validateCustomFields($data)
+	{
+		$post_type = get_post_type_object($data['post_type']);
+		$fields_left = apply_filters('nestedpages_quickedit_custom_fields', [], $post_type, 'left');
+		$fields_right = apply_filters('nestedpages_quickedit_custom_fields', [], $post_type, 'right');
+		$fields = array_merge($fields_left, $fields_right);
+		if ( empty($fields) ) return true;
+		foreach ( $fields as $field ){
+			if ( !isset($field['required']) || !$field['required'] ) continue;
+			$field_name = 'np_custom_' . $field['key'];
+			if ( !isset($data[$field_name]) || $data[$field_name] == '' ){
+				$message = ( isset($field['validation_message']) && $field['validation_message'] !== '' ) 
+					? $field['validation_message']
+					: sprintf(__('%s is required.', 'wp-nested-pages'), $field['label']);
+				return wp_send_json(['status' => 'error', 'message' => $message, 'data' => $data]);
+				die();
+			}
+		}
 		return true;
 	}
 }

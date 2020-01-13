@@ -20,12 +20,19 @@ NestedPages.Formatter = function()
 			var button = allButtons[i];
 			var row = $(button).parent('.row').parent('li');
 			if ( $(row).children('ol').length > 0 ){ // Row has a child menu
-				
-				var icon = ( $(row).children('ol:visible').length > 0 ) 
-					? NestedPages.cssClasses.iconToggleDown 
-					: NestedPages.cssClasses.iconToggleRight;
 
-				$(button).html('<div class="child-toggle-spacer"></div><a href="#"><i class="' + icon + '"></i></a>');
+				// Hide the toggle and child list if all items are in the trash
+				if ( $(row).children('ol').find('li.page-row').length < 1 ){
+					$(row).children('ol').hide();
+					continue;
+				}
+				
+				var open = ( $(row).children('ol:visible').length > 0 ) ? true : false;
+				var html = '<div class="child-toggle-spacer"></div>';
+				html += '<a href="#"';
+				if ( open ) html += ' class="open"';
+				html += '><span class="np-icon-arrow"></span></a>';
+				$(button).html(html);
 
 				if ( ($(row).children('ol').children('.np-hide').length > 0) && ($(row).children('ol').children('.np-hide.shown').length === 0) ){
 					$(button).find('a').hide();
@@ -53,6 +60,32 @@ NestedPages.Formatter = function()
 	// Adjust nested margins based on how deep the list is nested
 	plugin.setNestedMargins = function()
 	{
+		plugin.setIndent();
+	}
+
+	plugin.setIndent = function()
+	{
+		var amount = ( nestedpages.non_indent === '1' ) ? 20 : 30;
+		var indent_element = ( nestedpages.non_indent === '1' ) ? '.row-inner' : '.child-toggle';
+		$.each($(NestedPages.selectors.lists), function(i, v){
+			var parent_count = $(this).parents(NestedPages.selectors.lists).length;
+			var padding = 0;
+			if ( !NestedPages.jsData.sortable ) padding = 10;
+			if ( parent_count > 0 ){
+				var padding = ( parent_count * amount ) + padding;
+				$(this).find(indent_element).css('padding-left', padding + 'px');
+				return;
+			}
+			if ( !NestedPages.jsData.sortable || $(this).hasClass('no-sort') ){
+				$(this).find('.row-inner').css('padding-left', '10px');	
+				return;
+			}
+			$(this).find('.row-inner').css('padding-left', '0px');
+		});
+	}
+
+	plugin.setClassicIndent = function()
+	{
 		$.each($(NestedPages.selectors.lists), function(i, v){
 			var parent_count = $(this).parents(NestedPages.selectors.lists).length;
 			var padding = 0;
@@ -62,7 +95,7 @@ NestedPages.Formatter = function()
 				$(this).find('.row-inner').css('padding-left', padding + 'px');
 				return;
 			}
-			if ( !NestedPages.jsData.sortable ){
+			if ( !NestedPages.jsData.sortable || $(this).hasClass('no-sort') ){
 				$(this).find('.row-inner').css('padding-left', '10px');	
 				return;
 			}

@@ -31,6 +31,7 @@ NestedPages.selectors = {
 	syncCheckbox : '.np-sync-menu', // Sync menu checkbox
 	syncForm: '.np-sync-menu-cont', // The form/container for the sync menu element
 	ajaxError : '[data-nestedpages-error]', // AJAX error notification
+	trashWithChildrenButton : '[data-nestedpages-trash-children]',
 
 	// Responsive Toggle
 	toggleEditButtons : '.np-toggle-edit', // Button that toggles responsive buttons
@@ -54,8 +55,6 @@ NestedPages.selectors = {
 	quickEditLoadingIndicator : '.np-qe-loading', // Loading indicator in Quick Edit
 	quickEditErrorDiv : '.np-quickedit-error', // Error Div in Quick Edit
 	quickEditCancel : '.np-cancel-quickedit', // Cancel button in quick edit
-	quickEditToggleTaxonomies : '.np-toggle-taxonomies', // Toggle Taxonomies in Quick Edit
-	quickEditToggleMenuOptions : '.np-toggle-menuoptions', // Toggle Menu Options in Quick Edit
 
 	// Quick Edit - Links
 	quickEditButtonLink : '.np-quick-edit-redirect', // Button to open link quick edit
@@ -69,7 +68,7 @@ NestedPages.selectors = {
 
 	// Link Items
 	openLinkModal : '.open-redirect-modal', // Opens new link modal
-	linkModal : '#np-link-modal', // The add a link modal
+	linkModal : 'np-link-modal', // The add a link modal
 	saveLink : '.np-save-link', // Save Link Button
 	linkLoadingIndicator : '.np-link-loading', // Loading Indicator in Link Modal
 	linkErrorDiv : '.np-new-link-error', // Error Div in Link Modal
@@ -78,7 +77,7 @@ NestedPages.selectors = {
 	// Link Deletion
 	linkDeleteButton : '[data-np-confirm-delete]',
 	linkDeleteConfirmationButton : '[data-delete-confirmation]',
-	linkDeleteConfirmationModal : '#np-delete-confirmation-modal',
+	linkDeleteConfirmationModal : 'np-delete-confirmation-modal',
 	linkDeleteConfirmationModalText : '[data-np-link-delete-text]',
 
 	// New Page Items
@@ -92,11 +91,13 @@ NestedPages.selectors = {
 	addChildButton : '.add-new-child', // Button to add child page(s)
 	newChildError : '.np-newchild-error', // Error div in new child quick edit
 	cancelNewChildButton : '.np-cancel-newchild', // Cancel button in new child quick edit
+	newBeforeButton : 'data-insert-before', // Add new post(s) before a post
+	newAfterButton : 'data-insert-after', // Add new post(s) after a post
 
 	// Clone
 	cloneButton : '.clone-post', // Button to clone a post
 	confirmClone : '[data-confirm-clone]', // Button in modal to confirm clone
-	cloneModal : '#np-clone-modal', // Modal with clone options
+	cloneModal : 'np-clone-modal', // Modal with clone options
 	cloneQuantity : '[data-clone-quantity]', // Quantity to Clone
 	cloneStatus : '[data-clone-status]', // Clone Status
 	cloneAuthor : '[data-clone-author]', // Clone Author
@@ -119,8 +120,6 @@ NestedPages.selectors = {
 
 // CSS Classes
 NestedPages.cssClasses = {
-	iconToggleDown : 'np-icon-arrow-down',
-	iconToggleRight : 'np-icon-arrow-right',
 	noborder : 'no-border'
 }
 
@@ -151,6 +150,7 @@ NestedPages.formActions = {
 	syncNesting : 'npsort',
 	syncMenu : 'npsyncMenu',
 	newPage : 'npnewChild',
+	newBeforeAfter : 'npnewBeforeAfter',
 	quickEditLink : 'npquickEditLink',
 	getTaxonomies : 'npgetTaxonomies',
 	quickEditPost : 'npquickEdit',
@@ -160,7 +160,10 @@ NestedPages.formActions = {
 	manualMenuSync : 'npmanualMenuSync',
 	postSearch: 'nppostSearch',
 	wpmlTranslations : 'npWpmlTranslations',
-	resetSettings : 'npresetSettings'
+	resetSettings : 'npresetSettings',
+	resetUserPrefs : 'npresetUserPreferences',
+	resetAdminMenuSettings : 'npresetAdminMenuSettings',
+	trashWithChildren : 'nptrashWithChildren'
 }
 
 
@@ -173,7 +176,8 @@ NestedPages.Factory = function()
 	var $ = jQuery;
 
 	plugin.formatter = new NestedPages.Formatter;
-	plugin.responsive = new NestedPages.Responsive;
+	plugin.dropdowns = new NestedPages.Dropdowns;
+	plugin.modals = new NestedPages.Modals;
 	plugin.checkAll = new NestedPages.CheckAll;
 	plugin.bulkActions = new NestedPages.BulkActions;
 	plugin.menuToggle = new NestedPages.MenuToggle;
@@ -190,7 +194,9 @@ NestedPages.Factory = function()
 	plugin.confirmDelete = new NestedPages.ConfirmDelete;
 	plugin.manualSync = new NestedPages.ManualSync;
 	plugin.postSearch = new NestedPages.PostSearch;
+	plugin.postMove = new NestedPages.MovePost;
 	plugin.wpml = new NestedPages.Wpml;
+	plugin.trashWithChildren = new NestedPages.TrashWithChildren;
 
 	plugin.init = function()
 	{

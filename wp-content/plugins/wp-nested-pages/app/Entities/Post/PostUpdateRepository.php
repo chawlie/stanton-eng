@@ -68,9 +68,11 @@ class PostUpdateRepository
 			);
 
 			$wpdb->query( $query );
+			do_action('nestedpages_post_order_updated', $post_id, $parent, $key);
 
 			if ( isset($post['children']) ) $this->updateOrder($post['children'], $post_id);
 		}
+		do_action('nestedpages_posts_order_updated', $posts, $parent);
 		return true;
 	}
 
@@ -82,9 +84,11 @@ class PostUpdateRepository
 	*/
 	public function updatePost($data, $append_taxonomies = false)
 	{
-		$updated_post = array(
+		$updated_post = [
 			'ID' => sanitize_text_field($data['post_id'])
-		);
+		];
+
+		$this->validation->validateCustomFields($data);
 
 		if ( isset($data['post_title']) && $data['post_title'] == "" ){ 
 			$this->validation->checkEmpty($data['post_title'], __('Title', 'wp-nested-pages'));
@@ -103,6 +107,10 @@ class PostUpdateRepository
 
 		if ( !$this->post_type_repo->standardFieldDisabled('allow_comments', sanitize_text_field($data['post_type'])) ){
 			$updated_post['comment_status'] = ( isset($data['comment_status']) ) ? 'open' : 'closed';
+		}
+
+		if ( isset($data['post_parent']) && $data['post_parent'] != '-1' ){
+			$updated_post['post_parent'] = intval(sanitize_text_field($data['post_parent']));
 		}
 
 		if ( isset($data['np_date']) ) {
@@ -126,6 +134,7 @@ class PostUpdateRepository
 		$this->updateSticky($data);
 		$this->updateTemplate($data);
 		$this->updateNestedPagesStatus($data);
+		$this->updateCustomFields($data);
 
 		// Taxonomies
 		$this->updateCategories($data, $append_taxonomies);
@@ -244,6 +253,24 @@ class PostUpdateRepository
 	}
 
 	/**
+	* Update Custom Fields, Available through filters
+	* @param array data
+	*/
+	private function updateCustomFields($data)
+	{
+		foreach ( $data as $key => $value ){
+			if ( strpos($key, 'np_custom_') !== false) {
+				$field_key = str_replace('np_custom_', '', $key);
+				update_post_meta( 
+					$data['post_id'], 
+					$field_key, 
+					sanitize_text_field($data[$key])
+				);
+			}
+		}
+	}
+
+	/**
 	* Update Categories
 	* @since 1.0
 	* @param array data
@@ -253,7 +280,7 @@ class PostUpdateRepository
 		if ( isset($data['post_category']) )
 		{
 			$this->validation->validateIntegerArray($data['post_category']);
-			$cats = array();
+			$cats = [];
 			foreach($data['post_category'] as $cat) {
 				if ( $cat !== 0 ) $cats[] = (int) $cat;
 			}
@@ -288,7 +315,7 @@ class PostUpdateRepository
 	*/
 	private function updateHierarchicalTaxonomies($data, $taxonomy, $term_ids, $append_taxonomies)
 	{
-		$terms = array();
+		$terms = [];
 		foreach ( $term_ids as $term ){
 			if ( $term !== 0 ) $terms[] = (int) $term;
 		}
@@ -371,6 +398,7 @@ class PostUpdateRepository
 			$title = sanitize_text_field($data['navigationLabel']);
 			update_post_meta($id, '_np_nav_title', $title);
 		}
+		$this->updateNavStatus($data);
 	}
 
 	/**
@@ -381,13 +409,13 @@ class PostUpdateRepository
 	public function updateRedirect($data)
 	{
 		$menu_order = isset($data['menu_order']) ? $data['menu_order'] : 0;
-		$updated_post = array(
+		$updated_post = [
 			'ID' => sanitize_text_field($data['post_id']),
 			'post_title' => sanitize_text_field($data['post_title']),
 			'post_status' => sanitize_text_field($data['_status']),
 			'post_parent' => sanitize_text_field($data['parent_id']),
 			'menu_order' => $menu_order
-		);
+		];
 
 		if ( isset($data['post_content']) && $data['post_content'] !== "" ){
 			$updated_post['post_content'] = esc_url($data['post_content']);
@@ -405,17 +433,19 @@ class PostUpdateRepository
 	*/
 	public function saveRedirect($data)
 	{
-		$new_link = array(
+		$new_link = [
 			'post_title' => sanitize_text_field($data['menuTitle']),
 			'post_status' => sanitize_text_field('publish'),
 			'post_parent' => sanitize_text_field($data['parent_id']),
 			'post_type' => 'np-redirect',
 			'post_excerpt' => ''
-		);
+		];
 		if ( isset($data['url']) && $data['url'] !== "" ){
 			$new_link['post_content'] = esc_url($data['url']);
 		}
 		$this->new_id = wp_insert_post($new_link);
+		$parent_post_type = ( isset($data['parent_post_type']) ) ? sanitize_text_field($data['parent_post_type']) : 'page';
+		add_post_meta($this->new_id, '_np_parent_post_type', $parent_post_type);
 		$this->updateMenuMeta($data);
 		return $this->new_id;
 	}
@@ -427,11 +457,11 @@ class PostUpdateRepository
 	*/
 	public function updateFromMenuItem($data)
 	{
-		$updated_post = array(
+		$updated_post = [
 			'ID' => sanitize_text_field($data['post_id']),
 			'menu_order' => sanitize_text_field($data['menu_order']),
 			'post_parent' => sanitize_text_field($data['post_parent'])
-		);
+		];
 		if ( isset($data['content']) ){
 			$updated_post['post_content'] = $data['content'];
 			$updated_post['post_title'] = $data['np_nav_title'];

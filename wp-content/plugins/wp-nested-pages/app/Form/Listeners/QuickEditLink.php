@@ -23,11 +23,11 @@ class QuickEditLink extends BaseHandler
 		$updated = $this->post_update_repo->updateRedirect($this->data);
 		if ( !$updated ) $this->sendErrorResponse();
 		$this->addData();
-		$this->response = array(
+		$this->response = [
 			'status' => 'success',
 			'message' => __('Link successfully updated.', 'wp-nested-pages'),
 			'post_data' => $this->data
-		);
+		];
 	}
 
 	/**
@@ -35,7 +35,7 @@ class QuickEditLink extends BaseHandler
 	*/
 	private function addData()
 	{
-		$this->data['nav_status'] = ( isset($this->data['nav_status']) ) ? 'hide' : 'show';
+		$this->data['nav_status'] = ( isset($this->data['nav_status']) && $this->data['nav_status'] == 'hide' ) ? 'hide' : 'show';
 		$this->data['np_status'] = ( isset($this->data['nested_pages_status']) ) ? 'hide' : 'show';
 		$this->data['linkTarget'] = ( isset($this->data['linkTarget']) ) ? '_blank' : 'none';
 	}

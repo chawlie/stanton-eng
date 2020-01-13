@@ -21,13 +21,6 @@ NestedPages.QuickEditPost = function()
 	plugin.newData = ''; // New Data, after save
 	plugin.row = ''; // The row being edited
 
-
-	plugin.init = function()
-	{
-		plugin.bindEvents();
-	}
-
-
 	plugin.bindEvents = function()
 	{
 		$(document).on('click', NestedPages.selectors.quickEditOpen, function(e){
@@ -38,14 +31,6 @@ NestedPages.QuickEditPost = function()
 		$(document).on('click', NestedPages.selectors.quickEditCancel, function(e){
 			e.preventDefault();
 			plugin.formatter.removeQuickEdit();
-		});
-		$(document).on('click', NestedPages.selectors.quickEditToggleTaxonomies, function(e){
-			e.preventDefault();
-			$(this).parents('form').find('.np-taxonomies').toggle();
-		});
-		$(document).on('click', NestedPages.selectors.quickEditToggleMenuOptions, function(e){
-			e.preventDefault();
-			$(this).parents('form').find('.np-menuoptions').toggle();
 		});
 		$(document).on('change', '.keep_private', function(){
 			if ( this.checked ){
@@ -106,6 +91,13 @@ NestedPages.QuickEditPost = function()
 			sticky: $(plugin.button).attr('data-sticky')
 		};
 
+		// Add Custom Fields if Available
+		var attrs = $(plugin.button)[0].attributes;
+		$.each(attrs, function(i, attr){
+			if ( !attr.name.includes('data-npcustom') ) return;
+			plugin.initialData[attr.name] = attr.value;
+		});
+
 		// Add Array of Taxonomies to the data object using classes applied to the list element
 		plugin.initialData.h_taxonomies = [];
 		plugin.initialData.f_taxonomies = [];
@@ -151,7 +143,7 @@ NestedPages.QuickEditPost = function()
 		$(plugin.form).find('.np_title_attribute').val(plugin.initialData.navtitleattr);
 		$(plugin.form).find('.np_nav_css_classes').val(plugin.initialData.navcss);
 		$(plugin.form).find('.post_password').val(plugin.initialData.password);
-		$(plugin.form).find('.np_datepicker').val(plugin.initialData.datepicker);
+		$(plugin.form).find('.np_publish_date').val(plugin.initialData.datepicker);
 		if ( plugin.initialData.cs === 'open' ) $(plugin.form).find('.np_cs').attr('checked', 'checked');
 
 		if ( plugin.initialData.template !== '' ){
@@ -206,6 +198,18 @@ NestedPages.QuickEditPost = function()
 			$(plugin.form).find('input[name="mn"]').val(plugin.initialData.minute);
 		}
 
+		// Custom Fields
+		for ( var key in plugin.initialData ){
+			if ( !key.includes('npcustom') ) continue;
+			if ( plugin.initialData.hasOwnProperty(key) ){
+				var inputName = key.replace('data-npcustom-', '');
+				inputName = inputName.toLowerCase();
+				$(plugin.form).find('[data-np-custom-field="' + inputName + '"]').val(plugin.initialData[key]);
+			}
+		}
+
+		plugin.populateFlatTaxonomies();
+
 		// Populate Hierarchical Taxonomy Checkboxes
 		if ( plugin.initialData.hasOwnProperty('h_taxonomies') ){
 			var taxonomies = plugin.initialData.h_taxonomies;
@@ -215,10 +219,15 @@ NestedPages.QuickEditPost = function()
 			}
 		}
 
-		$(plugin.form).find('.np_datepicker').datepicker({
-			beforeShow: function(input, inst) {
-				$('#ui-datepicker-div').addClass('nestedpages-datepicker');
-			}
+		var datepickers = $(plugin.form).find('.np_datepicker');
+		$.each(datepickers, function(){
+			var $this = $(this);
+			$this.datepicker({
+				dateFormat: $this.attr('data-datepicker-format'),
+				beforeShow: function(input, inst) {
+					$('#ui-datepicker-div').addClass('nestedpages-datepicker');
+				}
+			});
 		});
 
 		plugin.formatter.showQuickEdit();
@@ -348,17 +357,21 @@ NestedPages.QuickEditPost = function()
 		
 		var status = $(plugin.row).find('.status');
 		if ( (plugin.newData._status !== 'publish') && (plugin.newData._status !== 'future') ){
-			$(status).text('(' + plugin.newData._status + ')');
-		} else if (plugin.newData.keep_private === 'private') {
-			$(status).text('(' + plugin.newData.keep_private + ')');
+			var newStatus = nestedpages.post_statuses[plugin.newData._status].label;
+			$(status).text('(' + newStatus + ')');
 		} else {
 			$(status).text('');
+		}
+		if ( plugin.newData.keep_private === 'private' ){
+			$(status).text(nestedpages.private);
 		}
 
 		// Password Lock Icon
 		if ( plugin.newData.post_password !== "" && typeof plugin.newData.post_password !== 'undefined'){
 			var statustext = $(status).text();
-			statustext += ' <i class="np-icon-lock"></i>';
+			statustext += ' <span class="locked">';
+			statustext += '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>'
+			statustext += '</span>';
 			$(status).html(statustext);
 		}
 
@@ -374,10 +387,10 @@ NestedPages.QuickEditPost = function()
 		var li = $(plugin.row).parent('li');
 		if ( (plugin.newData.np_status == 'hide') ){
 			$(li).addClass('np-hide');
-			$(plugin.row).find('.status').after('<i class="np-icon-eye-blocked"></i>');
+			$(plugin.row).find('.status').after('<svg class="row-status-icon status-np-hidden" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0z" fill="none"/><path class="icon" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>');
 		} else {
 			$(li).removeClass('np-hide');
-			$(plugin.row).find('.np-icon-eye-blocked').remove();
+			$(plugin.row).find('.status-np-hidden').remove();
 		}
 
 		// Sticky
@@ -427,6 +440,15 @@ NestedPages.QuickEditPost = function()
 		$(button).attr('data-time', plugin.newData.np_time);
 		$(button).attr('data-formattedtime', plugin.newData.np_time);
 		$(button).attr('data-ampm', plugin.newData.np_ampm);
+
+		// Custom Fields
+		for ( var key in plugin.newData ){
+			if ( !key.includes('np_custom') ) continue;
+			if ( plugin.newData.hasOwnProperty(key) ){
+				var attrName = key.replace('np_custom_', 'data-npcustom-');
+				$(button).attr(attrName, plugin.newData[key]);
+			}
+		}
 
 		plugin.removeTaxonomyClasses();
 		plugin.addCategoryClasses();
@@ -519,9 +541,6 @@ NestedPages.QuickEditPost = function()
 		$(NestedPages.selectors.quickEditLoadingIndicator).hide();
 	}
 
-	
-
-	return plugin.init();
-
+	return plugin.bindEvents();
 
 }
